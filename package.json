@@ -1,0 +1,19 @@
+{
+  "name": "voidborne",
+  "version": "5.0.0",
+  "private": true,
+  "description": "A procedural universe in one self-contained HTML file: raw WebGL2 + Web Audio, no assets, no libraries.",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs --check",
+    "watch": "node build.mjs --watch",
+    "test:seeds": "node tools/seed-test.mjs",
+    "test:seeds:ci": "node tools/seed-test.mjs --swiftshader"
+  },
+  "devDependencies": {
+    "playwright": "^1.50.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

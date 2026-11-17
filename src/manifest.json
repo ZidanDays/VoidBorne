@@ -1,0 +1,159 @@
+{
+ "template": "index.html",
+ "loader": "loader.js",
+ "output": "dist/voidborne.html",
+ "stages": [
+  {
+   "name": "setup",
+   "weight": 1,
+   "modules": [
+    "core/config.js",
+    "core/platform.js",
+    "i18n/strings-base.js",
+    "i18n/strings-scanner.js",
+    "i18n/strings-ui.js",
+    "input/bindings.js",
+    "i18n/language.js",
+    "core/boot.js",
+    "core/rng.js",
+    "core/math.js",
+    "core/noise.js",
+    "world/names.js"
+   ]
+  },
+  {
+   "name": "shaders",
+   "weight": 1,
+   "modules": [
+    "shaders/common.js",
+    "shaders/sky.js",
+    "shaders/mesh.js",
+    "shaders/billboard-points.js",
+    "shaders/bloom.js"
+   ]
+  },
+  {
+   "name": "post-shaders",
+   "weight": 1,
+   "modules": [
+    "shaders/planet.js",
+    "shaders/atmosphere-rings.js",
+    "shaders/volumetrics-taa.js",
+    "shaders/composite.js"
+   ]
+  },
+  {
+   "name": "geometry",
+   "weight": 2,
+   "modules": [
+    "gl/helpers.js",
+    "geometry/builders.js",
+    "geometry/ships.js",
+    "geometry/station-creatures.js",
+    "geometry/ao-pulsar.js"
+   ]
+  },
+  {
+   "name": "worlds",
+   "weight": 14,
+   "modules": [
+    "world/scene-setup.js",
+    "world/star-planets.js",
+    "world/belt-wrecks-station.js",
+    "world/secrets-landmarks.js",
+    "world/creatures.js",
+    "world/poi.js"
+   ]
+  },
+  {
+   "name": "creatures",
+   "weight": 3,
+   "modules": [
+    "player/input.js",
+    "player/flight-collision.js",
+    "creatures/boids-ecology.js",
+    "creatures/lights-structures.js"
+   ]
+  },
+  {
+   "name": "audio",
+   "weight": 1,
+   "modules": [
+    "audio/engine.js",
+    "audio/worklet.js",
+    "audio/mood.js"
+   ]
+  },
+  {
+   "name": "open-space",
+   "weight": 2,
+   "modules": [
+    "openworld/sectors.js",
+    "openworld/ship-logs.js",
+    "openworld/sector-generator.js",
+    "openworld/streaming.js",
+    "openworld/codex.js",
+    "openworld/signals-events.js",
+    "openworld/warp-autopilot.js",
+    "openworld/starmap.js"
+   ]
+  },
+  {
+   "name": "tools",
+   "weight": 1,
+   "modules": [
+    "tools/gamepad.js",
+    "tools/photo-recording.js",
+    "tools/fullscreen-wakelock.js"
+   ]
+  },
+  {
+   "name": "interior",
+   "weight": 3,
+   "modules": [
+    "interior/geometry.js",
+    "interior/doors-interactables.js",
+    "interior/state-collision.js",
+    "interior/tick-sounds.js"
+   ]
+  },
+  {
+   "name": "suit",
+   "weight": 1,
+   "modules": [
+    "suit/scanner.js",
+    "suit/visor.js",
+    "suit/intro.js",
+    "suit/fx-debug.js"
+   ]
+  },
+  {
+   "name": "settings",
+   "weight": 1,
+   "modules": [
+    "ui/captions.js",
+    "ui/language-settings.js",
+    "ui/keybinds.js"
+   ]
+  },
+  {
+   "name": "options",
+   "weight": 1,
+   "modules": [
+    "options/gravity-survival.js",
+    "options/debris.js",
+    "options/audio-depth.js",
+    "options/sharing.js"
+   ]
+  },
+  {
+   "name": "renderer",
+   "weight": 2,
+   "modules": [
+    "render/hud.js",
+    "render/pipeline.js",
+    "render/main-loop.js"
+   ]
+  }
+ ]
+}
