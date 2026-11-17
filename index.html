@@ -48,6 +48,10 @@ canvas#c{display:block;width:100%;height:100%;touch-action:none}
 #codex .card{max-width:720px;width:90%;max-height:80vh;overflow:auto;text-align:left}
 #codexlist div{border-top:1px solid rgba(140,200,240,.15);padding:8px 0;font-size:12px;line-height:1.6}
 #codexlist small{opacity:.6}
+#rec{position:fixed;left:18px;top:16px;color:#ff6b6b;font-size:12px;letter-spacing:.2em;display:none;z-index:8;text-shadow:0 0 6px #000}
+#photohint{position:fixed;left:50%;top:18px;transform:translateX(-50%);font-size:12px;letter-spacing:.2em;color:#cfe3ef;opacity:0;transition:opacity .6s;z-index:8;text-shadow:0 0 6px #000;pointer-events:none}
+#shot{position:fixed;right:18px;bottom:18px;display:none;z-index:9;padding:10px;border:1px solid rgba(140,200,240,.4);background:rgba(2,8,22,.9);max-width:340px;font-size:11px;line-height:1.6}
+#shot img,#shot video{display:block;max-width:320px;max-height:180px;margin-bottom:6px}
 #banner{position:fixed;left:50%;top:40%;transform:translateX(-50%);display:none;padding:14px 22px;border:1px solid rgba(255,200,120,.5);background:rgba(10,8,2,.85);color:#ffd9a0;font-size:12px;letter-spacing:.2em;z-index:8}
 </style>
 </head>
@@ -64,6 +68,9 @@ canvas#c{display:block;width:100%;height:100%;touch-action:none}
 <div class="ui" id="entry"></div>
 <div class="ui" id="warn"></div>
 <div id="banner"></div>
+<div id="rec"></div>
+<div id="photohint"></div>
+<div id="shot"></div>
 <div class="ui" id="signal"></div>
 <div class="ui" id="apl"></div>
 <div id="logbox"></div>
@@ -80,6 +87,7 @@ canvas#c{display:block;width:100%;height:100%;touch-action:none}
 <span>W</span><span>A</span><span>S</span><span>D</span> thrust &nbsp; <span>SPACE</span>/<span>CTRL</span> up/down &nbsp; <span>Q</span>/<span>E</span> roll<br>
 <span>SHIFT</span> boost &nbsp; <span>F</span> headlamp &nbsp; <span>M</span> mute &nbsp; <span>H</span> hide UI &nbsp; <span>ESC</span> pause<br>
 <span>TAB</span> star map / warp &nbsp; <span>T</span> autopilot &nbsp; <span>J</span> codex<br>
+<span>P</span> photo mode &nbsp; <span>R</span> record clip &nbsp; <span>O</span> fullscreen &nbsp; gamepad supported<br>
 <small>touch: joystick to move · drag right side to look</small>
 </div>
 <p id="seedline" style="font-size:11px;opacity:.6"></p>
@@ -91,6 +99,8 @@ canvas#c{display:block;width:100%;height:100%;touch-action:none}
 <label>QUALITY <select id="qual"><option value="low">low</option><option value="medium">medium</option><option value="high" selected>high</option></select></label>
 <label><input type="checkbox" id="mutebox"> MUTE</label>
 <p id="pstats" style="font-size:11px;opacity:.7"></p>
+<p id="pcaps" style="font-size:11px;opacity:.6;line-height:1.6"></p>
+<button class="btn" id="fsbtn">FULLSCREEN (O)</button> 
 <button class="btn" id="resume">RESUME</button>
 </div></div>
 
@@ -155,7 +165,19 @@ const CFG={
   AUTOPILOT_MARGIN:60,    // extra stand-off distance (m) where the autopilot stops
   MONOLITH_AWAKEN:6,      // discoveries needed before the Monolith reacts
   EVENT_MIN:90,EVENT_MAX:200, // seconds between random events (meteor shower, migration, stellar flare)
-  SAVE:true               // persist discoveries, codex and settings in localStorage
+  SAVE:true,              // persist discoveries, codex and settings in localStorage
+  // ---- added in Phase 4 (audio, input, tools) ----
+  HRTF:true,              // HRTF spatial audio (false = equalpower); 'low' quality always uses equalpower
+  AUDIO_WORKLET:true,     // whale song + cosmic hiss synthesized in an AudioWorklet (falls back to the node graph)
+  ZONE_MOOD:true,         // drone and music shift by zone (star / belt / deep space / wreck / open space)
+  GAMEPAD:true,           // Gamepad API support (standard mapping)
+  GP_DEADZONE:0.15,       // stick dead zone
+  GP_LOOK_SPEED:2.4,      // rad/s at full right-stick deflection
+  PHOTO_SPEED:20,         // photo-mode free camera speed (m/s; SHIFT ×6)
+  RECORD_FPS:60,          // canvas.captureStream frame rate for clip recording
+  RECORD_AUDIO:true,      // include the game audio in recorded clips
+  RECORD_BITRATE:8000000, // video bits per second
+  WAKE_LOCK:true          // keep the screen awake while playing (Screen Wake Lock API)
 };
 /* ===================================================================== */
 const $=s=>document.querySelector(s);
@@ -733,9 +755,9 @@ let emptyVAO=gl.createVertexArray();
 function q2m3(q){const x=q[0],y=q[1],z=q[2],w=q[3];return new Float32Array([1-2*(y*y+z*z),2*(x*y+z*w),2*(x*z-y*w),2*(x*y-z*w),1-2*(x*x+z*z),2*(y*z+x*w),2*(x*z+y*w),2*(y*z-x*w),1-2*(x*x+y*y)]);}
 // per-quality switches for the Phase 2 features: vol = {steps, resolution divisor} or null, rays = {n samples, passes},
 // taa = temporal AA on/off (+ history blend), scatter = raymarched atmosphere, ultra = dense mesh for the nearest planet, cl = creature lights
-const QUAL={low:{scale:0.7,sky:512,bloom:false,vol:null,rays:null,taa:false,taaBlend:0,scatter:false,ultra:false,cl:4},
-  medium:{scale:0.85,sky:768,bloom:true,vol:{steps:16,div:3},rays:{n:16,passes:1},taa:true,taaBlend:0.85,scatter:true,ultra:false,cl:8},
-  high:{scale:1.0,sky:1024,bloom:true,vol:{steps:28,div:2},rays:{n:32,passes:2},taa:true,taaBlend:0.9,scatter:true,ultra:true,cl:8}};
+const QUAL={low:{scale:0.7,sky:512,bloom:false,vol:null,rays:null,taa:false,taaBlend:0,scatter:false,ultra:false,cl:4,hrtf:false},
+  medium:{scale:0.85,sky:768,bloom:true,vol:{steps:16,div:3},rays:{n:16,passes:1},taa:true,taaBlend:0.85,scatter:true,ultra:false,cl:8,hrtf:true},
+  high:{scale:1.0,sky:1024,bloom:true,vol:{steps:28,div:2},rays:{n:32,passes:2},taa:true,taaBlend:0.9,scatter:true,ultra:true,cl:8,hrtf:true}};
 let quality=QUAL[CFG.QUALITY]||QUAL.high;
 /* ---- sky bake ---- */
 const skySeed=[rr(0,50),rr(0,50),rr(0,50)],bandN=rdir();const galDirs=[],galSizes=[];for(let i=0;i<6;i++){galDirs.push(...rdir());galSizes.push(rr(0.012,0.03));}
@@ -868,7 +890,7 @@ const player={pos:add(W0.pos,scl(norm(cross(norm(W0.pos),[0,1,0])),420)),q:qid()
 player.q=qlook(sub(W0.pos,player.pos),[0,1,0]);
 const basis=()=>({r:qrot(player.q,[1,0,0]),u:qrot(player.q,[0,1,0]),f:qrot(player.q,[0,0,-1])});
 const keys={};let locked=false,started=false,paused=false,muted=false;
-addEventListener('keydown',e=>{if(e.repeat)return;if(handleKey3(e))return;keys[e.code]=true;if(e.code==='KeyF'){player.lamp=!player.lamp;$('#lamp').textContent='HEADLAMP '+(player.lamp?'ON':'OFF');}
+addEventListener('keydown',e=>{if(e.repeat)return;if(handleKey4(e)||handleKey3(e))return;keys[e.code]=true;if(e.code==='KeyF'){player.lamp=!player.lamp;$('#lamp').textContent='HEADLAMP '+(player.lamp?'ON':'OFF');}
   if(e.code==='KeyM')toggleMute();if(e.code==='KeyH'){player.hideUI=!player.hideUI;for(const el of document.querySelectorAll('.ui,#radar'))el.style.visibility=player.hideUI?'hidden':'visible';}
   if(e.code==='Escape'&&started)setPaused(!paused);if(e.code==='Space')e.preventDefault();});
 addEventListener('keyup',e=>{keys[e.code]=false;});
@@ -904,7 +926,7 @@ function profR(ship,v){const n=ship.prof.length-1;const t=clamp(v,0,1)*n,k=Math.
 function updatePlayer(dt){
   const b=basis();let f=0,s=0,u=0,roll=0;
   if(started&&!paused&&!uiBlocking()){if(keys.KeyW)f+=1;if(keys.KeyS)f-=1;if(keys.KeyD)s+=1;if(keys.KeyA)s-=1;if(keys.Space)u+=1;if(keys.ControlLeft||keys.ControlRight||keys.KeyC)u-=1;if(keys.KeyQ)roll+=1;if(keys.KeyE)roll-=1;
-    f+=tIn.y;s+=tIn.x;u+=tIn.up;player.boost=!!(keys.ShiftLeft||keys.ShiftRight||tIn.boost);}
+    f+=tIn.y+GP.f;s+=tIn.x+GP.s;u+=tIn.up+GP.u;roll+=GP.roll;player.boost=!!(keys.ShiftLeft||keys.ShiftRight||tIn.boost||GP.boost);}
   if(WARP.on){warpStep(dt);return;}
   if(AP.on&&(f||s||u||roll))apOff('MANUAL CONTROL');
   if(AP.on){autopilotStep(dt);player.pos=add(player.pos,scl(player.vel,dt));player.fov=lerp(player.fov,player.boost?1.32:1.15,1-Math.exp(-4*dt));player._dt=dt;collide();deepSpaceCue();return;}
@@ -1018,23 +1040,27 @@ function setPos(node,p){const t=AUD.ctx.currentTime;if(node.positionX){setParam(
 function noiseBuf(sec,pink){const AC=AUD.ctx,sr=AC.sampleRate,b=AC.createBuffer(1,Math.floor(sr*sec),sr),d=b.getChannelData(0);let b0=0,b1=0,b2=0;
   for(let i=0;i<d.length;i++){const w=Math.random()*2-1;if(pink){b0=0.99765*b0+w*0.0990460;b1=0.96300*b1+w*0.2965164;b2=0.57000*b2+w*1.0526913;d[i]=(b0+b1+b2+w*0.1848)*0.12;}else d[i]=w;}return b;}
 function env(g,t0,a,peak,r,hold=0){g.gain.setValueAtTime(0.0001,t0);g.gain.linearRampToValueAtTime(peak,t0+a);g.gain.setValueAtTime(peak,t0+a+hold);g.gain.exponentialRampToValueAtTime(0.0001,t0+a+hold+r);}
-function makePanner(pos,ref=40){const AC=AUD.ctx;const p=AC.createPanner();p.panningModel='equalpower';p.distanceModel='inverse';p.refDistance=ref;p.maxDistance=6000;p.rolloffFactor=1.1;setPos(p,pos);p.connect(AUD.muffle);return p;}
+// HRTF on medium/high (CFG.HRTF), equalpower on low; switchable at runtime via applyPanning()
+function panModel(){return(CFG.HRTF&&quality.hrtf)?'HRTF':'equalpower';}
+function applyPanning(){if(!AUD.panners)return;const m=panModel();for(const p of AUD.panners)try{p.panningModel=m;}catch(e){}}
+function makePanner(pos,ref=40,temp){const AC=AUD.ctx;const p=AC.createPanner();p.panningModel=panModel();if(!temp)(AUD.panners=AUD.panners||[]).push(p);p.distanceModel='inverse';p.refDistance=ref;p.maxDistance=6000;p.rolloffFactor=1.1;setPos(p,pos);p.connect(AUD.muffle);return p;}
 function initAudio(){
   if(AUD.ctx)return;let AC;try{AC=new(window.AudioContext||window.webkitAudioContext)();}catch(e){return;}AUD.ctx=AC;const t=AC.currentTime;
-  const comp=AC.createDynamicsCompressor();comp.threshold.value=-12;comp.ratio.value=4;comp.connect(AC.destination);
+  const comp=AC.createDynamicsCompressor();AUD.comp=comp;comp.threshold.value=-12;comp.ratio.value=4;comp.connect(AC.destination);
   AUD.master=AC.createGain();AUD.master.gain.value=AUD.muted?0:AUD.vol;AUD.master.connect(comp);
   AUD.muffle=AC.createBiquadFilter();AUD.muffle.type='lowpass';AUD.muffle.frequency.value=20000;AUD.muffle.connect(AUD.master);
   // reverb from a generated impulse response
   const rv=AC.createConvolver();const sr=AC.sampleRate,L=sr*4,ir=AC.createBuffer(2,L,sr);for(let ch=0;ch<2;ch++){const d=ir.getChannelData(ch);for(let i=0;i<L;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/L,3.0)*(i<300?i/300:1);}
   rv.buffer=ir;AUD.revGain=AC.createGain();AUD.revGain.gain.value=0.35;rv.connect(AUD.revGain);AUD.revGain.connect(AUD.muffle);AUD.rev=rv;
   // drone pad
-  const lp=AC.createBiquadFilter();lp.type='lowpass';lp.frequency.value=240;lp.Q.value=1.2;const dg=AC.createGain();dg.gain.value=0.085;lp.connect(dg);dg.connect(AUD.muffle);dg.connect(rv);
-  for(const[f,ty,g]of[[55,'sawtooth',0.5],[55.35,'sawtooth',0.5],[82.4,'triangle',0.35],[27.5,'sine',0.8],[110.2,'sine',0.15]]){const o=AC.createOscillator();o.type=ty;o.frequency.value=f;const og=AC.createGain();og.gain.value=g;o.connect(og);og.connect(lp);o.start();
+  const lp=AC.createBiquadFilter();lp.type='lowpass';lp.frequency.value=240;lp.Q.value=1.2;const dg=AC.createGain();dg.gain.value=0.085;lp.connect(dg);dg.connect(AUD.muffle);dg.connect(rv);AUD.drone={lp,gain:dg,oscs:[]};
+  for(const[f,ty,g]of[[55,'sawtooth',0.5],[55.35,'sawtooth',0.5],[82.4,'triangle',0.35],[27.5,'sine',0.8],[110.2,'sine',0.15]]){const o=AC.createOscillator();o.type=ty;o.frequency.value=f;const og=AC.createGain();og.gain.value=g;o.connect(og);og.connect(lp);o.start();AUD.drone.oscs.push({o,f});
     const v=AC.createOscillator();v.frequency.value=err(0.03,0.09);const vg=AC.createGain();vg.gain.value=f*0.004;v.connect(vg);vg.connect(o.frequency);v.start();}
-  const lfo=AC.createOscillator();lfo.frequency.value=0.045;const lg=AC.createGain();lg.gain.value=130;lfo.connect(lg);lg.connect(lp.frequency);lfo.start();
+  AUD.drone.lfoTarget=lp.frequency;const lfo=AC.createOscillator();lfo.frequency.value=0.045;const lg=AC.createGain();lg.gain.value=130;lfo.connect(lg);lg.connect(lp.frequency);lfo.start();
   // cosmic hiss
   const hs=AC.createBufferSource();hs.buffer=noiseBuf(5,true);hs.loop=true;const hp=AC.createBiquadFilter();hp.type='highpass';hp.frequency.value=2500;const hg=AC.createGain();hg.gain.value=0.05;hs.connect(hp);hp.connect(hg);hg.connect(AUD.muffle);hs.start();
-  const hl=AC.createOscillator();hl.frequency.value=0.08;const hlg=AC.createGain();hlg.gain.value=0.02;hl.connect(hlg);hlg.connect(hg.gain);hl.start();
+  const hl=AC.createOscillator();hl.frequency.value=0.08;const hlg=AC.createGain();hlg.gain.value=0.02;hl.connect(hlg);hlg.connect(hg.gain);hl.start();AUD.hissFB={gain:hg,mod:hlg};
+  initMoodLayers(AC);
   // suit hum (not muffled: it's the player's own suit)
   const sg=AC.createGain();sg.gain.value=0.018;sg.connect(AUD.master);for(const f of[110,220.5]){const o=AC.createOscillator();o.type='sine';o.frequency.value=f;o.connect(sg);o.start();}
   // thruster
@@ -1045,12 +1071,15 @@ function initAudio(){
   AUD.wreckP=wrecks.map(w=>makePanner(w.pos,60));
   AUD.beaconP=makePanner(secrets[0].pos,80);AUD.beaconDelay=AC.createDelay(1.0);AUD.beaconDelay.delayTime.value=0.45;const bfb=AC.createGain();bfb.gain.value=0.45;AUD.beaconDelay.connect(bfb);bfb.connect(AUD.beaconDelay);AUD.beaconDelay.connect(AUD.beaconP);
   AUD.monoP=makePanner(secrets[1].pos,30);{const g=AC.createGain();g.gain.value=0.5;g.connect(AUD.monoP);for(const fr of[40,40.6,60.3]){const o=AC.createOscillator();o.type='sine';o.frequency.value=fr;o.connect(g);o.start();}}
+  AUD.wl='loading';loadWorklet(AC);
   AUD.timers={breath:2,whale:whales.map(()=>err(4,20)),crackle:3,creak:wrecks.map(()=>err(3,10)),chime:1,blip:0.5,ping:1,music:6};
 }
-function sfxWhale(p){const AC=AUD.ctx,t=AC.currentTime,dur=err(3,6),base=err(45,110);const g=AC.createGain();env(g,t,1.0,0.9,dur*0.6,dur*0.3);const lp=AC.createBiquadFilter();lp.type='lowpass';lp.frequency.value=600;g.connect(lp);lp.connect(p);lp.connect(AUD.rev);
+function sfxWhale(p,i){const dur=err(3,6),base=err(45,110),rise=err(1.5,2.4);
+  if(AUD.wl===true&&AUD.whaleNodes&&AUD.whaleNodes[i]){AUD.whaleNodes[i].port.postMessage({type:'call',base,dur,rise,vib:err(3,6),idx:err(0.4,1.4)});return;}
+  const AC=AUD.ctx,t=AC.currentTime;const g=AC.createGain();env(g,t,1.0,0.9,dur*0.6,dur*0.3);const lp=AC.createBiquadFilter();lp.type='lowpass';lp.frequency.value=600;g.connect(lp);lp.connect(p);lp.connect(AUD.rev);
   const vib=AC.createOscillator();vib.frequency.value=err(3,6);const vg=AC.createGain();vg.gain.value=4;vib.connect(vg);vib.start(t);vib.stop(t+dur+2);
-  for(const[m,a]of[[1,1],[2,0.4],[3,0.15],[0.5,0.3]]){const o=AC.createOscillator();o.type='sine';o.frequency.setValueAtTime(base*m,t);o.frequency.exponentialRampToValueAtTime(base*m*err(1.5,2.4),t+dur*0.45);o.frequency.exponentialRampToValueAtTime(base*m*0.6,t+dur);const og=AC.createGain();og.gain.value=a;vg.connect(o.frequency);o.connect(og);og.connect(g);o.start(t);o.stop(t+dur+2);}}
-function sfxChime(pos){const AC=AUD.ctx,t=AC.currentTime;const p=makePanner(pos,30);const f=epick([523,659,784,880,1046,1318]);const g=AC.createGain();env(g,t,0.02,0.5,2.5);g.connect(p);g.connect(AUD.rev);
+  for(const[m,a]of[[1,1],[2,0.4],[3,0.15],[0.5,0.3]]){const o=AC.createOscillator();o.type='sine';o.frequency.setValueAtTime(base*m,t);o.frequency.exponentialRampToValueAtTime(base*m*rise,t+dur*0.45);o.frequency.exponentialRampToValueAtTime(base*m*0.6,t+dur);const og=AC.createGain();og.gain.value=a;vg.connect(o.frequency);o.connect(og);og.connect(g);o.start(t);o.stop(t+dur+2);}}
+function sfxChime(pos){const AC=AUD.ctx,t=AC.currentTime;const p=makePanner(pos,30,true);const f=epick([523,659,784,880,1046,1318]);const g=AC.createGain();env(g,t,0.02,0.5,2.5);g.connect(p);g.connect(AUD.rev);
   for(const[m,a]of[[1,1],[2.76,0.25],[5.4,0.08]]){const o=AC.createOscillator();o.type='sine';o.frequency.value=f*m;const og=AC.createGain();og.gain.value=a;o.connect(og);og.connect(g);o.start(t);o.stop(t+3);}setTimeout(()=>p.disconnect(),3500);}
 function sfxBlip(){const AC=AUD.ctx,t=AC.currentTime;const o=AC.createOscillator();o.type='sine';const f=err(1800,4200);o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*1.6,t+0.04);const g=AC.createGain();env(g,t,0.005,0.08,0.05);const pan=AC.createStereoPanner();pan.pan.value=err(-0.8,0.8);o.connect(g);g.connect(pan);pan.connect(AUD.muffle);o.start(t);o.stop(t+0.1);}
 function sfxCreak(p){const AC=AUD.ctx,t=AC.currentTime,d=err(0.4,1.2);const o=AC.createOscillator();o.type='sawtooth';const f=err(50,140);o.frequency.setValueAtTime(f,t);o.frequency.linearRampToValueAtTime(f*err(0.5,1.5),t+d);
@@ -1060,7 +1089,7 @@ function sfxCrackle(p){const AC=AUD.ctx,t=AC.currentTime;const n=AC.createBuffer
   const k=4+(Math.random()*10|0);for(let i=0;i<k;i++){const tt=t+Math.random()*0.4;g.gain.setValueAtTime(0.6,tt);g.gain.setValueAtTime(0,tt+0.006+Math.random()*0.01);}n.connect(hp);hp.connect(g);g.connect(p);n.start(t);n.stop(t+0.5);}
 function sfxPing(gain=1,k=0){const AC=AUD.ctx,t=AC.currentTime;const o=AC.createOscillator();o.type='sine';o.frequency.value=660+440*k;const g=AC.createGain();env(g,t,0.01,0.7*gain,0.35);o.connect(g);g.connect(AUD.beaconDelay);g.connect(AUD.beaconP);o.start(t);o.stop(t+0.5);}
 const SCALE=[220,261.6,293.7,329.6,392,440,523.3,587.3,659.3,784];
-function sfxNote(){const AC=AUD.ctx,t=AC.currentTime;const f=epick(SCALE);const g=AC.createGain();env(g,t,1.8,0.06,4.5);const lp=AC.createBiquadFilter();lp.type='lowpass';lp.frequency.value=1200;g.connect(lp);lp.connect(AUD.muffle);lp.connect(AUD.rev);
+function sfxNote(){const AC=AUD.ctx,t=AC.currentTime;const mz=moodZone();const f=epick(MOOD[mz].scale);const g=AC.createGain();env(g,t,MOOD[mz].att,0.06*MOOD[mz].amp,MOOD[mz].rel);const lp=AC.createBiquadFilter();lp.type='lowpass';lp.frequency.value=MOOD[mz].bright;g.connect(lp);lp.connect(AUD.muffle);lp.connect(AUD.rev);
   for(const[m,a,ty]of[[1,1,'triangle'],[2,0.3,'sine'],[1.5,ernd()<0.4?0.35:0,'sine']]){if(!a)continue;const o=AC.createOscillator();o.type=ty;o.frequency.value=f*m;o.detune.value=err(-6,6);const og=AC.createGain();og.gain.value=a;o.connect(og);og.connect(g);o.start(t);o.stop(t+7);}}
 function sfxBreath(){const AC=AUD.ctx,t=AC.currentTime;const n=AC.createBufferSource();n.buffer=noiseBuf(2.5,false);const bp=AC.createBiquadFilter();bp.type='bandpass';bp.frequency.setValueAtTime(700,t);bp.frequency.linearRampToValueAtTime(1100,t+1.2);bp.frequency.linearRampToValueAtTime(500,t+2.4);bp.Q.value=0.8;
   const g=AC.createGain();g.gain.setValueAtTime(0.0001,t);g.gain.linearRampToValueAtTime(0.035,t+1.0);g.gain.linearRampToValueAtTime(0.004,t+1.5);g.gain.linearRampToValueAtTime(0.03,t+2.0);g.gain.linearRampToValueAtTime(0.0001,t+2.6);n.connect(bp);bp.connect(g);g.connect(AUD.master);n.start(t);n.stop(t+2.7);}
@@ -1072,15 +1101,74 @@ function audioTick(dt){const AC=AUD.ctx;if(!AC)return;if(AC.state==='suspended')
   setParam(AUD.muffle.frequency,player.inside?480:20000,t,0.25);setParam(AUD.revGain.gain,player.inside?0.75:0.35,t,0.3);
   setParam(AUD.thr.gain,Math.min(1,player.accel/180)*0.22,t,0.08);setParam(AUD.thrF.frequency,700+player.accel*4,t,0.1);
   T.breath-=dt;if(T.breath<0){sfxBreath();T.breath=err(3.8,4.8);}
-  whales.forEach((w,i)=>{setPos(AUD.whaleP[i],w.pos);T.whale[i]-=dt;if(T.whale[i]<0){if(len(sub(w.pos,player.pos))<2500)sfxWhale(AUD.whaleP[i]);T.whale[i]=err(12,35);}});
+  whales.forEach((w,i)=>{setPos(AUD.whaleP[i],w.pos);T.whale[i]-=dt;if(T.whale[i]<0){if(len(sub(w.pos,player.pos))<2500)sfxWhale(AUD.whaleP[i],i);T.whale[i]=err(12,35);}});
   const dSt=len(sub(station.pos,player.pos));T.crackle-=dt;if(T.crackle<0){if(dSt<1600)sfxCrackle(AUD.stationP);T.crackle=err(1.5,6);}
   wrecks.forEach((w,i)=>{T.creak[i]-=dt;if(T.creak[i]<0){const d=len(sub(w.pos,player.pos));if(d<500)sfxCreak(AUD.wreckP[i]);if(d<300&&Math.random()<0.5)sfxCrackle(AUD.wreckP[i]);T.creak[i]=err(3,11);}});
   T.chime-=dt;if(T.chime<0){if(medusae.nearest&&len(sub(medusae.nearest,player.pos))<90)sfxChime(medusae.nearest);T.chime=err(1.5,4);}
   T.blip-=dt;if(T.blip<0){if(MINN.nearest&&len(sub(MINN.nearest,player.pos))<45)sfxBlip();T.blip=err(0.12,0.5);}
   // nearest signal source pings faster, louder and higher as you approach (Phase 3)
   T.ping-=dt;if(T.ping<0){const s=nearestSignal();if(s){setPos(AUD.beaconP,s.pos);sfxPing(0.35+0.65*s.k,s.k);T.ping=0.3+2.4*(1-s.k);}else T.ping=1;}
-  if(CFG.MUSIC){T.music-=dt;if(T.music<0){sfxNote();T.music=err(5,11);}}
+  moodTick(dt);
+  if(CFG.MUSIC){T.music-=dt;if(T.music<0){sfxNote();const m=MOOD[moodZone()];T.music=err(m.gap[0],m.gap[1]);}}
 }
+
+/* ---- AudioWorklet (Phase 4): whale song (FM sweeps) and cosmic hiss synthesized per sample, loaded from a Blob URL ---- */
+const WORKLET_SRC=`
+class VBHiss extends AudioWorkletProcessor{
+  static get parameterDescriptors(){return[{name:'level',defaultValue:0.05,minValue:0,maxValue:1},{name:'bright',defaultValue:2500,minValue:100,maxValue:12000}];}
+  constructor(){super();this.s=[0x1234567,0x7654321];this.p=[[0,0,0],[0,0,0]];this.lp=[0,0];this.ph=0;this.gust=0;this.gt=0;}
+  rnd(c){let x=this.s[c];x^=x<<13;x^=x>>>17;x^=x<<5;this.s[c]=x|0;return((x>>>0)/4294967296)*2-1;}
+  process(_,outs,par){const out=outs[0];const n=out[0].length;const lv=par.level,br=par.bright;const a=Math.exp(-2*Math.PI*br[0]/sampleRate);
+    for(let i=0;i<n;i++){this.ph+=0.08/sampleRate;this.gt-=1/sampleRate;if(this.gt<0){this.gt=2+Math.random()*6;this.gust=Math.random()*0.8;}
+      const mod=0.6+0.4*Math.sin(this.ph*6.2832)+this.gust*Math.sin(this.ph*40.0);const L=lv.length>1?lv[i]:lv[0];
+      for(let c=0;c<out.length&&c<2;c++){const w=this.rnd(c);const p=this.p[c];p[0]=0.99765*p[0]+w*0.099046;p[1]=0.963*p[1]+w*0.2965164;p[2]=0.57*p[2]+w*1.0526913;
+        const pink=(p[0]+p[1]+p[2]+w*0.1848)*0.12;this.lp[c]=a*this.lp[c]+(1-a)*pink;out[c][i]=(pink-this.lp[c])*L*mod*2.2;}}
+    return true;}}
+registerProcessor('vb-hiss',VBHiss);
+class VBWhale extends AudioWorkletProcessor{
+  constructor(){super();this.v=[];this.port.onmessage=e=>{const d=e.data;if(d.type==='call'&&this.v.length<3)this.v.push({t:0,dur:d.dur,base:d.base,rise:d.rise,vib:d.vib,idx:d.idx,ph:[0,0,0,0],mph:0,vph:0,lp:0});};}
+  process(_,outs){const out=outs[0][0];const n=out.length;out.fill(0);const P=[1,2,3,0.5],A=[1,0.4,0.15,0.3];const dt=1/sampleRate;const a=Math.exp(-2*Math.PI*600/sampleRate);
+    for(const v of this.v){for(let i=0;i<n;i++){v.t+=dt;const T=v.t,D=v.dur;
+      const sw=T<D*0.45?Math.pow(v.rise,T/(D*0.45)):v.rise*Math.pow(0.6/v.rise,(T-D*0.45)/(D*0.55));
+      const env=T<1?T:(T<1+D*0.3?1:Math.max(0,Math.exp(-(T-1-D*0.3)/(D*0.18))));
+      v.vph+=v.vib*dt;const vib=4*Math.sin(v.vph*6.2832);const f0=v.base*sw+vib;v.mph+=f0*0.5*dt;const fm=Math.sin(v.mph*6.2832)*v.idx*(0.3+0.7*T/D);
+      let s=0;for(let k=0;k<4;k++){v.ph[k]+=f0*P[k]*dt*(1+0.02*fm);s+=Math.sin(v.ph[k]*6.2832+fm)*A[k];}
+      v.lp=a*v.lp+(1-a)*s;out[i]+=v.lp*env*0.55;}}
+    this.v=this.v.filter(v=>v.t<v.dur+1.6+v.dur*0.6);for(let c=1;c<outs[0].length;c++)outs[0][c].set(out);return true;}}
+registerProcessor('vb-whale',VBWhale);`;
+async function loadWorklet(AC){if(!CFG.AUDIO_WORKLET||!AC.audioWorklet||typeof AudioWorkletNode==='undefined'){AUD.wl='fallback (AudioWorklet unavailable)';return;}
+  // Blob URL first; pages opened from disk have a null origin and some browsers refuse blob:null modules, so retry with a data: URL
+  try{let loaded=false,firstErr=null;
+    try{await AC.audioWorklet.addModule(URL.createObjectURL(new Blob([WORKLET_SRC],{type:'text/javascript'})));loaded=true;AUD.wlSrc='blob';}catch(e){firstErr=e;}
+    if(!loaded){await AC.audioWorklet.addModule('data:text/javascript;charset=utf-8,'+encodeURIComponent(WORKLET_SRC));AUD.wlSrc='data';}
+    const hiss=new AudioWorkletNode(AC,'vb-hiss',{outputChannelCount:[2]});const hp=hiss.parameters.get('level');hp.value=0.05;hiss.connect(AUD.muffle);AUD.hissNode=hiss;
+    AUD.hissFB.mod.disconnect();AUD.hissFB.gain.gain.setTargetAtTime(0,AC.currentTime,0.5);
+    AUD.whaleNodes=AUD.whaleP.map(p=>{const n=new AudioWorkletNode(AC,'vb-whale',{outputChannelCount:[1]});n.connect(p);n.connect(AUD.rev);return n;});AUD.wl=true;
+    // if a processor ever throws, drop back to the node-graph synthesis (and restore the buffer hiss)
+    const onErr=()=>{if(AUD.wl!==true)return;AUD.wl='fallback (processor error)';try{AUD.hissNode.disconnect();}catch(e){}AUD.hissFB.gain.gain.setTargetAtTime(0.05,AC.currentTime,0.5);};
+    hiss.onprocessorerror=onErr;for(const n of AUD.whaleNodes)n.onprocessorerror=onErr;}
+  catch(e){AUD.wl='fallback ('+(e&&e.message||e)+')';}}
+/* ---- zone mood: drone, pads and music crossfade between zones ---- */
+const MOOD={
+  open:{cut:240,gain:0.085,pitch:1.0,warm:0,cold:0,scale:[220,261.6,293.7,329.6,392,440,523.3,587.3,659.3,784],gap:[5,11],att:1.8,rel:4.5,amp:1,bright:1200},
+  star:{cut:430,gain:0.09,pitch:1.0,warm:1,cold:0,scale:[220,277.2,311.1,329.6,415.3,440,554.4,622.3,659.3],gap:[3.5,7],att:1.2,rel:4,amp:1.1,bright:1800},
+  belt:{cut:190,gain:0.065,pitch:1.0,warm:0,cold:0.3,scale:[587.3,659.3,784,880,1046.5,1174.7],gap:[10,18],att:0.4,rel:6,amp:0.7,bright:2600},
+  deep:{cut:150,gain:0.1,pitch:0.944,warm:0,cold:1,scale:[110,116.5,130.8,146.8,164.8,174.6,196,220],gap:[8,15],att:3,rel:7,amp:1.2,bright:700},
+  wreck:{cut:170,gain:0.08,pitch:0.891,warm:0,cold:0.5,scale:[146.8,155.6,174.6,207.7,220],gap:[9,16],att:2.5,rel:5,amp:0.8,bright:600}};
+const ZW={open:1,star:0,belt:0,deep:0,wreck:0};
+function initMoodLayers(AC){const mk=(freqs,type,cut)=>{const g=AC.createGain();g.gain.value=0;const lp=AC.createBiquadFilter();lp.type='lowpass';lp.frequency.value=cut;lp.connect(g);g.connect(AUD.muffle);g.connect(AUD.rev);
+    for(const f of freqs){const o=AC.createOscillator();o.type=type;o.frequency.value=f;o.detune.value=err(-7,7);const v=AC.createOscillator();v.frequency.value=err(0.05,0.15);const vg=AC.createGain();vg.gain.value=f*0.003;v.connect(vg);vg.connect(o.frequency);o.connect(lp);o.start();v.start();}return g;};
+  AUD.warmPad=mk([110,138.6,164.8,220,277.2],'triangle',900);AUD.coldPad=mk([440.5,466.2,659.3,698.5],'sine',3000);}
+function inBelt(p){const lp=qrot(qconj(BELT.q),p);const r=Math.hypot(lp[0],lp[2]);return r>BELT.R0-300&&r<BELT.R1+300&&Math.abs(lp[1])<BELT.ySpread+250;}
+function moodZone(){let best='open',bv=-1;for(const k in ZW)if(ZW[k]>bv){bv=ZW[k];best=k;}return best;}
+function moodTick(dt){if(!CFG.ZONE_MOOD||!AUD.drone)return;const t=AUD.ctx.currentTime;const st=activeStar();
+  const tgt={star:smooth(3200,1000,len(sub(st.pos,player.pos))),belt:inBelt(player.pos)?1:0,deep:systemOf(player.pos)?0:1,wreck:player.inside?1:0};
+  if(tgt.wreck)tgt.star=tgt.belt=tgt.deep=0;tgt.open=Math.max(0,1-tgt.star-tgt.belt-tgt.deep-tgt.wreck);
+  const k=1-Math.exp(-dt/3);let sum=0;for(const z in ZW){ZW[z]=lerp(ZW[z],tgt[z]||0,k);sum+=ZW[z];}
+  let cut=0,gain=0,pitch=0,warm=0,cold=0;for(const z in ZW){const w=ZW[z]/sum,m=MOOD[z];cut+=m.cut*w;gain+=m.gain*w;pitch+=m.pitch*w;warm+=m.warm*w;cold+=m.cold*w;}
+  AUD.mood={cut:Math.round(cut),gain:+gain.toFixed(3),pitch:+pitch.toFixed(3),warm:+warm.toFixed(2),cold:+cold.toFixed(2)};
+  setParam(AUD.drone.lp.frequency,cut,t,1.5);setParam(AUD.drone.gain.gain,gain,t,1.5);for(const d of AUD.drone.oscs)setParam(d.o.frequency,d.f*pitch,t,2.5);
+  setParam(AUD.warmPad.gain,warm*0.045,t,2);setParam(AUD.coldPad.gain,cold*0.03,t,2);}
 
 /* =====================================================================
    OPEN WORLD (Phase 3)
@@ -1389,6 +1477,91 @@ if(isTouch){const b=document.createElement('button');b.className='btn';b.textCon
 updateCount();
 
 /* =====================================================================
+   INPUT & TOOLS (Phase 4): gamepad · photo mode · clip recording · fullscreen · wake lock
+   ===================================================================== */
+/* ---- gamepad (standard mapping) ----
+   left stick move · right stick look · RT/LT ascend/descend (analog) · LB/RB roll · A boost (hold) · B autopilot
+   X headlamp · Y star map · View/Back codex · Start pause · L3 photo mode · R3 photo capture
+   in the map: D-pad ←/→ choose a star, ↑/↓ choose a waypoint, A warp, B autopilot to waypoint */
+const GP={f:0,s:0,u:0,roll:0,boost:false,prev:[],id:null,mapStar:-1,mapRow:-1};
+addEventListener('gamepadconnected',e=>{if(CFG.GAMEPAD&&started)toast('GAMEPAD CONNECTED');});
+function dz(v){const d=CFG.GP_DEADZONE;return Math.abs(v)<d?0:(v-Math.sign(v)*d)/(1-d);}
+function gamepadTick(dt){GP.f=GP.s=GP.u=GP.roll=0;GP.boost=false;if(!CFG.GAMEPAD||!navigator.getGamepads)return;let pad=null;
+  try{for(const p of navigator.getGamepads())if(p&&p.connected){pad=p;break;}}catch(e){return;}
+  if(!pad){GP.id=null;return;}GP.id=pad.id;const B=i=>!!(pad.buttons[i]&&pad.buttons[i].pressed),V=i=>pad.buttons[i]?pad.buttons[i].value:0,A=i=>dz(pad.axes[i]||0);
+  const edge=i=>{const now=B(i),was=!!GP.prev[i];GP.prev[i]=now;return now&&!was;};const ed=[];for(let i=0;i<17;i++)ed[i]=edge(i);
+  if(!started){if(ed[0]||ed[9])$('#begin').click();return;}
+  if(ed[9]){if(PHOTO.on)togglePhoto(false);else if(MAP.open)toggleMap(false);else setPaused(!paused);}
+  if(paused)return;
+  if(MAP.open){const stars=MAP.hits.slice().sort((a,b)=>len(sub(a.m.star,player.pos))-len(sub(b.m.star,player.pos)));
+    if(ed[15]||ed[14]){GP.mapStar=(GP.mapStar+(ed[15]?1:-1)+stars.length)%Math.max(1,stars.length);if(stars[GP.mapStar]){MAP.sel=stars[GP.mapStar].m;mapInfo();}}
+    if(ed[13]||ed[12]){const n=MAP.rows.length;GP.mapRow=(GP.mapRow+(ed[13]?1:-1)+n)%Math.max(1,n);if(MAP.rows[GP.mapRow]){MAP.wp=MAP.rows[GP.mapRow].p;mapInfo();}}
+    if(ed[0]&&MAP.sel)startWarp(MAP.sel);if(ed[1]&&MAP.wp){toggleMap(false);toggleAutopilot();}if(ed[3])toggleMap(false);return;}
+  if(ed[10])togglePhoto();if(PHOTO.on&&ed[11])PHOTO.capture=true;
+  if(!PHOTO.on){if(ed[1])toggleAutopilot();if(ed[2]){player.lamp=!player.lamp;$('#lamp').textContent='HEADLAMP '+(player.lamp?'ON':'OFF');}if(ed[3]&&!WARP.on)toggleMap(true);if(ed[8])toggleCodex();}
+  if(CODEX.open||WARP.on)return;
+  GP.f=-A(1);GP.s=A(0);GP.u=V(7)-V(6);GP.roll=(B(4)?1:0)-(B(5)?1:0);GP.boost=B(0);
+  const lx=A(2),ly=A(3);if(lx||ly){const k=CFG.GP_LOOK_SPEED*dt;player.q=qnorm(qmul(player.q,qmul(qaxis([0,1,0],-lx*k),qaxis([1,0,0],-ly*k))));}}
+/* ---- saving files: download link plus an on-screen preview (downloads can be blocked in sandboxed frames) ---- */
+const stamp=()=>{const d=new Date(),z=n=>String(n).padStart(2,'0');return d.getFullYear()+z(d.getMonth()+1)+z(d.getDate())+'-'+z(d.getHours())+z(d.getMinutes())+z(d.getSeconds());};
+let shotT=null;
+function saveBlob(blob,name,kind){const url=URL.createObjectURL(blob);try{const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();}catch(e){}
+  const box=$('#shot');box.innerHTML=(kind==='video'?'<video src="'+url+'" controls muted></video>':'<img src="'+url+'" alt="">')+'SAVED · '+esc(name)+'<br><span style="opacity:.65">if no download started, right-click the preview to save it</span><br><button class="btn" id="shotclose">CLOSE</button>';
+  box.style.display='block';$('#shotclose').onclick=()=>{box.style.display='none';};clearTimeout(shotT);if(kind!=='video')shotT=setTimeout(()=>{box.style.display='none';},7000);}
+/* ---- photo mode: UI hidden, time frozen, free camera, PNG capture ---- */
+const PHOTO={on:false,saved:null,capture:false};
+function hint(msg,ms){const h=$('#photohint');h.textContent=msg;h.style.opacity=1;clearTimeout(hint.t);hint.t=setTimeout(()=>h.style.opacity=0,ms||4000);}
+function setUIHidden(hidden){for(const el of document.querySelectorAll('.ui,#radar,#logbox'))el.style.visibility=hidden?'hidden':'visible';}
+function togglePhoto(v){const on=v===undefined?!PHOTO.on:v;if(on===PHOTO.on)return;
+  if(on){if(MAP.open||CODEX.open||WARP.on)return;apOff();PHOTO.saved={pos:player.pos.slice(),q:player.q.slice(),vel:player.vel.slice(),boost:player.boost,fov:player.fov};player.vel=[0,0,0];player.fov=1.15;PHOTO.on=true;setUIHidden(true);
+    hint('PHOTO MODE · WASD / SPACE / CTRL fly · mouse look · Q/E roll · SHIFT fast · ENTER save PNG · P exit',5000);}
+  else{const s=PHOTO.saved;if(s){player.pos=s.pos;player.q=s.q;player.vel=s.vel;player.boost=s.boost;player.fov=s.fov;}PHOTO.on=false;setUIHidden(player.hideUI);taaValid=false;hint('',1);}}
+function photoStep(dt){const b=basis();let f=0,s=0,u=0,roll=0;if(keys.KeyW)f++;if(keys.KeyS)f--;if(keys.KeyD)s++;if(keys.KeyA)s--;if(keys.Space)u++;if(keys.ControlLeft||keys.ControlRight||keys.KeyC)u--;if(keys.KeyQ)roll++;if(keys.KeyE)roll--;
+  f+=tIn.y+GP.f;s+=tIn.x+GP.s;u+=tIn.up+GP.u;roll+=GP.roll;if(roll)player.q=qnorm(qmul(player.q,qaxis([0,0,1],roll*1.2*dt)));
+  const sp=CFG.PHOTO_SPEED*((keys.ShiftLeft||keys.ShiftRight||GP.boost)?6:1);player.pos=add(player.pos,scl(add(add(scl(b.f,f),scl(b.r,s)),scl(b.u,u)),sp*dt));}
+function capturePNG(){try{canvas.toBlob(blob=>{if(blob)saveBlob(blob,'voidborne-'+stamp()+'.png','image');else toast('CAPTURE FAILED');},'image/png');}catch(e){toast('CAPTURE FAILED');}}
+/* ---- clip recording: canvas.captureStream() + MediaRecorder -> WebM ---- */
+const REC={on:false,mr:null,chunks:[],t0:0,stream:null};
+function recSupported(){return!!(canvas.captureStream&&typeof MediaRecorder!=='undefined');}
+function toggleRecord(){if(REC.on){try{REC.mr.stop();}catch(e){}return;}
+  if(!recSupported()){toast('CLIP RECORDING IS NOT SUPPORTED IN THIS BROWSER');return;}
+  let stream;try{stream=canvas.captureStream(CFG.RECORD_FPS);}catch(e){toast('CLIP RECORDING IS NOT AVAILABLE HERE');return;}
+  if(CFG.RECORD_AUDIO&&AUD.ctx&&AUD.comp&&AUD.ctx.createMediaStreamDestination){try{if(!AUD.recDest){AUD.recDest=AUD.ctx.createMediaStreamDestination();AUD.comp.connect(AUD.recDest);}for(const t of AUD.recDest.stream.getAudioTracks())stream.addTrack(t);}catch(e){}}
+  const types=['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'];
+  const mime=types.find(t=>{try{return MediaRecorder.isTypeSupported(t);}catch(e){return false;}})||'';
+  try{REC.mr=new MediaRecorder(stream,mime?{mimeType:mime,videoBitsPerSecond:CFG.RECORD_BITRATE}:{videoBitsPerSecond:CFG.RECORD_BITRATE});}catch(e){toast('RECORDING FAILED TO START');return;}
+  REC.chunks=[];REC.stream=stream;REC.mr.ondataavailable=e=>{if(e.data&&e.data.size)REC.chunks.push(e.data);};
+  REC.mr.onstop=()=>{REC.on=false;$('#rec').style.display='none';for(const t of stream.getVideoTracks())t.stop();if(!REC.chunks.length){toast('RECORDING WAS EMPTY');return;}
+    saveBlob(new Blob(REC.chunks,{type:(mime||'video/webm').split(';')[0]}),'voidborne-'+stamp()+'.webm','video');};
+  REC.mr.onerror=()=>{toast('RECORDING ERROR');};
+  try{REC.mr.start(1000);}catch(e){toast('RECORDING FAILED TO START');return;}REC.on=true;REC.t0=performance.now();$('#rec').style.display='block';recTick();}
+function recTick(){if(!REC.on)return;const s=Math.floor((performance.now()-REC.t0)/1000);$('#rec').textContent='● REC '+String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0')+' · R to stop';}
+/* ---- fullscreen ---- */
+function toggleFullscreen(){try{if(document.fullscreenElement){document.exitFullscreen();return;}const r=document.documentElement.requestFullscreen({navigationUI:'hide'});if(r&&r.catch)r.catch(()=>toast('FULLSCREEN IS NOT ALLOWED HERE'));}catch(e){toast('FULLSCREEN IS NOT AVAILABLE');}}
+$('#fsbtn').onclick=toggleFullscreen;
+document.addEventListener('fullscreenchange',()=>{if(document.fullscreenElement&&!paused)relock();});
+/* ---- screen wake lock while playing ---- */
+const WL={s:null,pending:false,t:0};
+function wakeTick(dt){if(!CFG.WAKE_LOCK||!navigator.wakeLock)return;WL.t-=dt;if(WL.t>0)return;WL.t=1;const want=started&&!paused&&document.visibilityState==='visible';
+  if(want&&!WL.s&&!WL.pending){WL.pending=true;navigator.wakeLock.request('screen').then(s=>{WL.s=s;WL.pending=false;s.addEventListener('release',()=>{WL.s=null;});}).catch(()=>{WL.pending=false;WL.t=10;});}
+  else if(!want&&WL.s){const s=WL.s;WL.s=null;s.release().catch(()=>{});}}
+document.addEventListener('visibilitychange',()=>{WL.t=0;});
+/* ---- capability summary in the pause menu ---- */
+function capsText(){return['audio: '+(AUD.ctx?(AUD.wl===true?'AudioWorklet ('+AUD.wlSrc+' URL)':String(AUD.wl||'node graph')):'not started')+' · panning '+(AUD.ctx?panModel():'—'),
+  'gamepad: '+(GP.id?GP.id.slice(0,40):(navigator.getGamepads?'none connected':'unsupported')),'clip recording: '+(recSupported()?'available':'unsupported')+' · wake lock: '+(navigator.wakeLock?(WL.s?'held':'available'):'unsupported'),
+  'sectors: '+GEN.mode+' generation'].join('<br>');}
+$('#qual').addEventListener('change',()=>{if(AUD.ctx)applyPanning();});
+/* ---- keys added in Phase 4 (runs before the Phase 3 handler; returns true when consumed) ---- */
+function handleKey4(e){if(!started)return false;
+  if(e.code==='KeyO'){toggleFullscreen();return true;}
+  if(paused)return false;
+  if(PHOTO.on){if(e.code==='KeyP'||e.code==='Escape'){togglePhoto(false);return true;}if(e.code==='Enter'){PHOTO.capture=true;return true;}if(e.code==='KeyR'){toggleRecord();return true;}
+    if(e.code==='Tab'||e.code==='KeyT'||e.code==='KeyJ'||e.code==='KeyH'||e.code==='KeyF'){e.preventDefault();return true;}return false;}
+  if(e.code==='KeyP'&&!MAP.open&&!CODEX.open&&!WARP.on){togglePhoto(true);return true;}
+  if(e.code==='KeyR'&&!MAP.open&&!CODEX.open){toggleRecord();return true;}
+  return false;}
+
+/* =====================================================================
    HUD, RADAR, LABELS
    ===================================================================== */
 const radar=$('#radar'),rctx=radar.getContext('2d');
@@ -1586,12 +1759,14 @@ function scaleTick(dt){const floor=Math.min(CFG.MIN_RENDER_SCALE,quality.scale);
 let last=performance.now(),fpsAcc=0,fpsN=0,fpsShown=0;
 function frame(now){const raw=now-last;last=now;const dt=Math.min(0.05,raw/1000);fpsAcc+=raw;fpsN++;if(fpsAcc>500){fpsShown=Math.round(fpsN*1000/fpsAcc);fpsAcc=0;fpsN=0;}
   if(glLost){requestAnimationFrame(frame);return;}
-  frameEMA=lerp(frameEMA,raw,0.05);scaleTick(dt);
+  frameEMA=lerp(frameEMA,raw,0.05);scaleTick(dt);gamepadTick(dt);
   try{
-    if(started&&!paused){time+=dt;updatePlayer(dt);streamTick(dt);processUploads();updateStructures();sectorUpdate();updateMinnows(dt);updateWhales();updateMedusae(dt);eventsTick(dt);gatherLights();updateDiscovery();logCheck(dt);signalHUD(dt);updateTrail();audioTick(dt);saveTick(dt);}
+    if(PHOTO.on){photoStep(dt);processUploads();}  // photo mode: time frozen, free camera
+    else if(started&&!paused){time+=dt;updatePlayer(dt);streamTick(dt);processUploads();updateStructures();sectorUpdate();updateMinnows(dt);updateWhales();updateMedusae(dt);eventsTick(dt);gatherLights();updateDiscovery();logCheck(dt);signalHUD(dt);updateTrail();audioTick(dt);saveTick(dt);}
     else if(!started){time+=dt;processUploads();updateStructures();updateWhales();updateMedusae(dt);updateMinnows(dt);gatherLights();}
-    updateGrade(dt);render();updateHUD(dt,fpsShown);if(MAP.open)drawMap();
-    if(paused)$('#pstats').textContent='render scale '+Math.round(renderScale*100)+'% · '+fpsShown+' fps · seed '+CFG.SEED;
+    updateGrade(dt);render();if(PHOTO.capture){PHOTO.capture=false;capturePNG();}  // read back in the same task, before the buffer is presented
+    updateHUD(dt,fpsShown);if(MAP.open)drawMap();recTick();wakeTick(dt);
+    if(paused){$('#pstats').textContent='render scale '+Math.round(renderScale*100)+'% · '+fpsShown+' fps · seed '+CFG.SEED;if((frameIdx&15)===0)$('#pcaps').innerHTML=capsText();}
   }catch(e){showErr(e.stack||String(e));return;}
   requestAnimationFrame(frame);}
 $('#begin').onclick=()=>{started=true;$('#start').style.display='none';initAudio();if(AUD.ctx&&AUD.ctx.state==='suspended')AUD.ctx.resume();if(!isTouch){try{const r=canvas.requestPointerLock();if(r&&r.catch)r.catch(()=>{});}catch(_){}}};
