@@ -5,6 +5,10 @@
 //   node build.mjs --check         -> also syntax-checks the joined JavaScript with `node --check`
 //   node build.mjs --watch         -> rebuild whenever a file in src/ changes
 //   node build.mjs --out file.html -> custom output path
+//   node build.mjs --debug         -> dist/voidborne.debug.html: the same game plus the test API (window.__VB) and the
+//                                     benchmark (src/debug/, manifest "debugStages"). Used by tests/shots.mjs and
+//                                     tests/bench.html. The release file never contains the debug API: the build fails
+//                                     if "__VB" appears in a non-debug output.
 //
 // How the output is put together (see src/manifest.json):
 //  * src/index.html is the page shell (HTML + CSS). The marker <!--@STAGES--> is replaced by the code.
@@ -25,15 +29,19 @@ import { fileURLToPath } from 'node:url';
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const SRC = join(ROOT, 'src');
 const args = process.argv.slice(2);
-const opt = (name, def) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : def; };
+const opt = (name, def) => {
+  const i = args.indexOf(name);
+  return i >= 0 ? args[i + 1] : def;
+};
 
-export function build({ out, check = false, quiet = false } = {}) {
+export function build({ out, check = false, quiet = false, debug = false } = {}) {
   const manifest = JSON.parse(readFileSync(join(SRC, 'manifest.json'), 'utf8'));
   const template = readFileSync(join(SRC, manifest.template), 'utf8');
   const loader = readFileSync(join(SRC, manifest.loader), 'utf8');
   if (!template.includes('<!--@STAGES-->')) throw new Error('index.html has no <!--@STAGES--> marker');
   const seen = new Set();
-  const stages = manifest.stages.map((st) => {
+  const stageList = debug ? [...manifest.stages, ...(manifest.debugStages || [])] : manifest.stages;
+  const stages = stageList.map((st) => {
     let code = '';
     for (const m of st.modules) {
       if (seen.has(m)) throw new Error(`module listed twice: ${m}`);
@@ -46,9 +54,13 @@ export function build({ out, check = false, quiet = false } = {}) {
     if (!code.trimStart().startsWith("'use strict'")) code = "'use strict';\n" + code;
     return { ...st, code };
   });
-  const blocks = stages.map((s) => `<script type="text/x-vb" data-name="${s.name}" data-w="${s.weight || 1}">\n${s.code}\n</script>\n`).join('');
+  const blocks = stages
+    .map((s) => `<script type="text/x-vb" data-name="${s.name}" data-w="${s.weight || 1}">\n${s.code}\n</script>\n`)
+    .join('');
   const html = template.replace('<!--@STAGES-->', blocks + `<script>\n${loader}</script>\n`);
-  const target = resolve(ROOT, out || manifest.output);
+  if (!debug && html.includes('__VB'))
+    throw new Error('release build contains the debug API (__VB): debug code must live in debugStages only');
+  const target = resolve(ROOT, out || (debug ? manifest.debugOutput || 'dist/voidborne.debug.html' : manifest.output));
   mkdirSync(dirname(target), { recursive: true });
   writeFileSync(target, html);
   if (check) {
@@ -57,13 +69,21 @@ export function build({ out, check = false, quiet = false } = {}) {
     const tmp = join(tmpdir(), `voidborne-check-${process.pid}.js`);
     writeFileSync(tmp, joined);
     const r = spawnSync(process.execPath, ['--check', tmp], { encoding: 'utf8' });
-    if (r.status !== 0) { process.stderr.write(r.stderr || r.stdout); throw new Error('syntax check failed'); }
+    if (r.status !== 0) {
+      process.stderr.write(r.stderr || r.stdout);
+      throw new Error('syntax check failed');
+    }
   }
   if (/https?:\/\//.test(html.replace(/<!--[\s\S]*?-->/g, '')))
     console.warn('warning: the output contains an http(s) URL — the deliverable must not make network requests');
   if (!quiet) {
-    console.log(`built ${target} · ${(html.length / 1024).toFixed(1)} KB · ${stages.length} stages · ${seen.size} modules${check ? ' · syntax OK' : ''}`);
-    for (const s of stages) console.log(`  ${s.name.padEnd(13)} ${String(s.modules.length).padStart(2)} modules ${(s.code.length / 1024).toFixed(1).padStart(6)} KB`);
+    console.log(
+      `built ${target}${debug ? ' (debug)' : ''} · ${(html.length / 1024).toFixed(1)} KB · ${stages.length} stages · ${seen.size} modules${check ? ' · syntax OK' : ''}`,
+    );
+    for (const s of stages)
+      console.log(
+        `  ${s.name.padEnd(13)} ${String(s.modules.length).padStart(2)} modules ${(s.code.length / 1024).toFixed(1).padStart(6)} KB`,
+      );
   }
   return html;
 }
@@ -71,13 +91,26 @@ export function build({ out, check = false, quiet = false } = {}) {
 if (import.meta.url === `file://${process.argv[1]}` || process.argv[1] === fileURLToPath(import.meta.url)) {
   const out = opt('--out');
   const check = args.includes('--check');
-  try { build({ out, check }); } catch (e) { console.error('build failed:', e.message); process.exit(1); }
+  const debug = args.includes('--debug');
+  try {
+    build({ out, check, debug });
+  } catch (e) {
+    console.error('build failed:', e.message);
+    process.exit(1);
+  }
   if (args.includes('--watch')) {
     console.log('watching src/ …');
     let timer = null;
     watch(SRC, { recursive: true }, () => {
       clearTimeout(timer);
-      timer = setTimeout(() => { try { build({ out, check, quiet: true }); console.log(new Date().toLocaleTimeString(), 'rebuilt'); } catch (e) { console.error(e.message); } }, 150);
+      timer = setTimeout(() => {
+        try {
+          build({ out, check, debug, quiet: true });
+          console.log(new Date().toLocaleTimeString(), 'rebuilt');
+        } catch (e) {
+          console.error(e.message);
+        }
+      }, 150);
     });
   }
 }

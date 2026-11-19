@@ -1,8 +1,7 @@
-
 /* =====================================================================
    SHADER LIBRARY
    ===================================================================== */
-const GL_NOISE=`
+const GL_NOISE = `
 float hash12(vec2 p){vec3 p3=fract(vec3(p.xyx)*0.1031);p3+=dot(p3,p3.yzx+33.33);return fract((p3.x+p3.y)*p3.z);}
 float hash13(vec3 p3){p3=fract(p3*0.1031);p3+=dot(p3,p3.zyx+31.32);return fract((p3.x+p3.y)*p3.z);}
 vec3 hash33(vec3 p3){p3=fract(p3*vec3(0.1031,0.1030,0.0973));p3+=dot(p3,p3.yxz+33.33);return fract((p3.xxy+p3.yxx)*p3.zyx);}
@@ -16,8 +15,10 @@ vec2 voro(vec3 p){vec3 i=floor(p),f=fract(p);float d1=9.0,d2=9.0;
  return vec2(d1,d2);}
 vec3 bump3(vec3 p){return vec3(vn3(p),vn3(p+vec3(5.2,1.3,9.1)),vn3(p+vec3(11.7,3.3,2.2)))-0.5;}`;
 // Far plane for logarithmic depth. Sector streaming needs a large range; log depth keeps ~1e-6 relative precision.
-const FAR=4.0e6,LF=Math.log2(FAR+1).toFixed(6);
-const LOGZ=`gl_Position.z=(2.0*log2(max(1e-6,gl_Position.w+1.0))/${LF}-1.0)*gl_Position.w;vFz=1.0+gl_Position.w;`;
-const FDEPTH_IN=`in float vFz;`;const FDEPTH=`gl_FragDepth=log2(max(vFz,1.0))/${LF};`;
-const FS_VS=`#version 300 es
+const FAR = 4.0e6,
+  LF = Math.log2(FAR + 1).toFixed(6);
+const LOGZ = `gl_Position.z=(2.0*log2(max(1e-6,gl_Position.w+1.0))/${LF}-1.0)*gl_Position.w;vFz=1.0+gl_Position.w;`;
+const FDEPTH_IN = `in float vFz;`;
+const FDEPTH = `gl_FragDepth=log2(max(vFz,1.0))/${LF};`;
+const FS_VS = `#version 300 es
 out vec2 vUV;void main(){vec2 p=vec2(float((gl_VertexID<<1)&2),float(gl_VertexID&2));vUV=p;gl_Position=vec4(p*2.0-1.0,0.0,1.0);}`;

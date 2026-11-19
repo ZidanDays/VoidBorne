@@ -1,0 +1,298 @@
+{
+  "about": "Camera bookmarks for tests/shots.mjs. Each one loads dist/voidborne.debug.html?det=1&manual=1#seed=<seed>&q=<quality>, freezes the frame loop, optionally sets the clock ('time', s), places the camera with __VB.place(place) (see src/debug/vb-api.js), runs 1 frame, waits for streaming, runs frames-2 more frames and captures the canvas. 'dir' is the direction from the subject to the camera (\"sun\" = its lit side); 'dist' is in radii of the subject unless the place says metres.",
+  "size": [640, 360],
+  "frames": 6,
+  "tolerance": {
+    "channel": 3,
+    "pixels": 0.002
+  },
+  "bookmarks": [
+    {
+      "name": "spawn-1337-high",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "spawn"
+      }
+    },
+    {
+      "name": "open-space-1337-high",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "open"
+      }
+    },
+    {
+      "name": "nebula-1337-high",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "nebula",
+        "index": 0,
+        "dist": 2.2
+      }
+    },
+    {
+      "name": "star-corona-1337-high",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "star",
+        "dist": 3.2,
+        "dir": [0.5, 0.25, 0.83]
+      }
+    },
+    {
+      "name": "flare-1337-high",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "flare",
+        "dist": 3.2,
+        "dir": [0.5, 0.25, 0.83]
+      }
+    },
+    {
+      "name": "planet-rocky-1337-high",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "planet",
+        "type": 0,
+        "dist": 2.4,
+        "dir": "sun"
+      }
+    },
+    {
+      "name": "planet-gas-1337-high",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "planet",
+        "type": 1,
+        "dist": 2.6,
+        "dir": "sun"
+      }
+    },
+    {
+      "name": "planet-ice-1337-high",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "planet",
+        "type": 2,
+        "dist": 2.4,
+        "dir": "sun"
+      }
+    },
+    {
+      "name": "planet-lava-1337-high",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "planet",
+        "type": 3,
+        "dist": 2.4,
+        "dir": "sun"
+      }
+    },
+    {
+      "name": "planet-day-1337-high",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "planet",
+        "type": 4,
+        "dist": 1.25,
+        "dir": "sun"
+      }
+    },
+    {
+      "name": "planet-night-1337-high",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "planet",
+        "type": 4,
+        "dist": 1.25,
+        "dir": [0.2, 0.25, 0.95]
+      }
+    },
+    {
+      "name": "moon-1337-high",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "moon",
+        "dist": 4
+      }
+    },
+    {
+      "name": "ringed-planet-1337-high",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "ringed",
+        "dist": 2.4,
+        "dir": [0.3, 0.35, 0.9]
+      }
+    },
+    {
+      "name": "belt-1337-high",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "belt",
+        "angle": 0.8
+      }
+    },
+    {
+      "name": "school-1337-high",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "school",
+        "index": 0,
+        "dist": 70
+      }
+    },
+    {
+      "name": "whale-1337-high",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "whale",
+        "index": 0,
+        "dist": 1
+      }
+    },
+    {
+      "name": "medusa-1337-high",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "medusa",
+        "index": 0,
+        "dist": 220
+      }
+    },
+    {
+      "name": "wreck0-1337-high",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "wreck",
+        "index": 0,
+        "dist": 2.5,
+        "dir": [0.6, 0.3, 0.75]
+      }
+    },
+    {
+      "name": "breach-1337-high",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "breach",
+        "dist": 12
+      }
+    },
+    {
+      "name": "interior-1337-high",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "interior"
+      }
+    },
+    {
+      "name": "station-1337-medium",
+      "seed": 1337,
+      "quality": "medium",
+      "place": {
+        "at": "station",
+        "dist": 3,
+        "dir": [-0.5, 0.2, 0.8]
+      }
+    },
+    {
+      "name": "blackhole-1337-high",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "landmark",
+        "kind": "blackhole",
+        "dist": 520
+      }
+    },
+    {
+      "name": "pulsar-1337-high",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "landmark",
+        "kind": "pulsar",
+        "dist": 320
+      }
+    },
+    {
+      "name": "system-77-medium",
+      "seed": 77,
+      "quality": "medium",
+      "place": {
+        "at": "star",
+        "dist": 14,
+        "dir": [0.3, 0.7, 0.65]
+      }
+    },
+    {
+      "name": "nebula-77-medium",
+      "seed": 77,
+      "quality": "medium",
+      "place": {
+        "at": "nebula",
+        "index": 2,
+        "dist": 2.2
+      }
+    },
+    {
+      "name": "blackhole-77-medium",
+      "seed": 77,
+      "quality": "medium",
+      "place": {
+        "at": "landmark",
+        "kind": "blackhole",
+        "dist": 520
+      }
+    },
+    {
+      "name": "system-7-low",
+      "seed": 7,
+      "quality": "low",
+      "place": {
+        "at": "star",
+        "dist": 14,
+        "dir": [0.2, 0.6, 0.77]
+      }
+    },
+    {
+      "name": "wreck0-7-low",
+      "seed": 7,
+      "quality": "low",
+      "place": {
+        "at": "wreck",
+        "index": 0,
+        "dist": 2.5
+      }
+    },
+    {
+      "name": "sector-42-medium",
+      "seed": 42,
+      "quality": "medium",
+      "place": {
+        "at": "sector",
+        "dist": 6
+      }
+    }
+  ]
+}

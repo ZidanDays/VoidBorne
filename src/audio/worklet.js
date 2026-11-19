@@ -1,5 +1,5 @@
 /* ---- AudioWorklet (Phase 4): whale song (FM sweeps) and cosmic hiss synthesized per sample, loaded from a Blob URL ---- */
-const WORKLET_SRC=`
+const WORKLET_SRC = `
 class VBHiss extends AudioWorkletProcessor{
   static get parameterDescriptors(){return[{name:'level',defaultValue:0.05,minValue:0,maxValue:1},{name:'bright',defaultValue:2500,minValue:100,maxValue:12000}];}
   constructor(){super();this.s=[0x1234567,0x7654321];this.p=[[0,0,0],[0,0,0]];this.lp=[0,0];this.ph=0;this.gust=0;this.gt=0;}
@@ -23,15 +23,52 @@ class VBWhale extends AudioWorkletProcessor{
       v.lp=a*v.lp+(1-a)*s;out[i]+=v.lp*env*0.55;}}
     this.v=this.v.filter(v=>v.t<v.dur+1.6+v.dur*0.6);for(let c=1;c<outs[0].length;c++)outs[0][c].set(out);return true;}}
 registerProcessor('vb-whale',VBWhale);`;
-async function loadWorklet(AC){if(!CFG.AUDIO_WORKLET||!AC.audioWorklet||typeof AudioWorkletNode==='undefined'){AUD.wl='fallback (AudioWorklet unavailable)';return;}
+async function loadWorklet(AC) {
+  if (!CFG.AUDIO_WORKLET || !AC.audioWorklet || typeof AudioWorkletNode === 'undefined') {
+    AUD.wl = 'fallback (AudioWorklet unavailable)';
+    return;
+  }
   // Blob URL first; pages opened from disk have a null origin and some browsers refuse blob:null modules, so retry with a data: URL
-  try{let loaded=false,firstErr=null;
-    try{await AC.audioWorklet.addModule(URL.createObjectURL(new Blob([WORKLET_SRC],{type:'text/javascript'})));loaded=true;AUD.wlSrc='blob';}catch(e){firstErr=e;}
-    if(!loaded){await AC.audioWorklet.addModule('data:text/javascript;charset=utf-8,'+encodeURIComponent(WORKLET_SRC));AUD.wlSrc='data';}
-    const hiss=new AudioWorkletNode(AC,'vb-hiss',{outputChannelCount:[2]});const hp=hiss.parameters.get('level');hp.value=0.05;hiss.connect(AUD.muffle);AUD.hissNode=hiss;
-    AUD.hissFB.mod.disconnect();AUD.hissFB.gain.gain.setTargetAtTime(0,AC.currentTime,0.5);
-    AUD.whaleNodes=AUD.whaleP.map(p=>{const n=new AudioWorkletNode(AC,'vb-whale',{outputChannelCount:[1]});n.connect(p);n.connect(AUD.rev);return n;});AUD.wl=true;
+  try {
+    let loaded = false,
+      firstErr = null;
+    try {
+      await AC.audioWorklet.addModule(URL.createObjectURL(new Blob([WORKLET_SRC], { type: 'text/javascript' })));
+      loaded = true;
+      AUD.wlSrc = 'blob';
+    } catch (e) {
+      firstErr = e;
+    }
+    if (!loaded) {
+      await AC.audioWorklet.addModule('data:text/javascript;charset=utf-8,' + encodeURIComponent(WORKLET_SRC));
+      AUD.wlSrc = 'data';
+    }
+    const hiss = new AudioWorkletNode(AC, 'vb-hiss', { outputChannelCount: [2] });
+    const hp = hiss.parameters.get('level');
+    hp.value = 0.05;
+    hiss.connect(AUD.muffle);
+    AUD.hissNode = hiss;
+    AUD.hissFB.mod.disconnect();
+    AUD.hissFB.gain.gain.setTargetAtTime(0, AC.currentTime, 0.5);
+    AUD.whaleNodes = AUD.whaleP.map((p) => {
+      const n = new AudioWorkletNode(AC, 'vb-whale', { outputChannelCount: [1] });
+      n.connect(p);
+      n.connect(AUD.rev);
+      return n;
+    });
+    AUD.wl = true;
     // if a processor ever throws, drop back to the node-graph synthesis (and restore the buffer hiss)
-    const onErr=()=>{if(AUD.wl!==true)return;AUD.wl='fallback (processor error)';try{AUD.hissNode.disconnect();}catch(e){}AUD.hissFB.gain.gain.setTargetAtTime(0.05,AC.currentTime,0.5);};
-    hiss.onprocessorerror=onErr;for(const n of AUD.whaleNodes)n.onprocessorerror=onErr;}
-  catch(e){AUD.wl='fallback ('+(e&&e.message||e)+')';}}
+    const onErr = () => {
+      if (AUD.wl !== true) return;
+      AUD.wl = 'fallback (processor error)';
+      try {
+        AUD.hissNode.disconnect();
+      } catch (e) {}
+      AUD.hissFB.gain.gain.setTargetAtTime(0.05, AC.currentTime, 0.5);
+    };
+    hiss.onprocessorerror = onErr;
+    for (const n of AUD.whaleNodes) n.onprocessorerror = onErr;
+  } catch (e) {
+    AUD.wl = 'fallback (' + ((e && e.message) || e) + ')';
+  }
+}

@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>VOIDBORNE benchmark</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  body{font:14px/1.45 system-ui,sans-serif;margin:0;background:#0b0d12;color:#d8dde8}
+  header{padding:16px 20px;border-bottom:1px solid #222838}
+  h1{font-size:18px;margin:0 0 6px}
+  .meta,.small{color:#8a93a6;font-size:12px}
+  form{display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin-top:10px}
+  label{display:flex;gap:6px;align-items:center}
+  input[type=number]{width:80px}
+  input,select,button{font:inherit;background:#151a24;color:#d8dde8;border:1px solid #2a3245;border-radius:4px;padding:4px 8px}
+  button{cursor:pointer;background:#1f2a40}
+  button:disabled{opacity:.5;cursor:default}
+  #stage{padding:16px 20px}
+  #frame{border:1px solid #222838;background:#000;display:block}
+  table{border-collapse:collapse;margin:12px 0;width:100%}
+  th,td{border-bottom:1px solid #222838;padding:5px 8px;text-align:right}
+  th:first-child,td:first-child{text-align:left}
+  th{color:#8a93a6;font-weight:600}
+  .fail{color:#ff6b6b}
+  textarea{width:100%;height:180px;background:#11151d;color:#b9c3d6;border:1px solid #222838;font:12px ui-monospace,monospace}
+  details{margin:6px 0}
+</style>
+</head>
+<body>
+<header>
+  <h1>VOIDBORNE benchmark</h1>
+  <div class="meta">Runs the debug build (<code>dist/voidborne.debug.html</code>, made by <code>npm run build:debug</code>) once per quality preset: the same scripted 8-shot camera path through the home system, the same seed, the preset's own render scale (no dynamic resolution). It records frame time, main-thread CPU (total and per system), GPU time per frame and per render pass when the browser offers <code>EXT_disjoint_timer_query_webgl2</code>, draw calls and render scale — overall, per shot and per second. Frame times come from the browser's frame callbacks, so with vsync on they cannot go below your display's refresh interval — for uncapped numbers run <code>npm run bench</code>, which starts Chrome without the frame-rate limit. Keep this tab in front while it runs. Meant for real devices: numbers from software rendering mean nothing.</div>
+  <form id="f" onsubmit="return false">
+    <span id="presets"></span>
+    <label>seconds <input type="number" id="sec" min="2" max="600" value="30"></label>
+    <label>seed <input type="number" id="seed" value="1337"></label>
+    <label>size <select id="size"><option>1280x720</option><option>1920x1080</option><option>960x540</option><option>2560x1440</option></select></label>
+    <button id="go">Start</button>
+    <button id="dl" disabled>Download JSON</button>
+  </form>
+  <div class="small" id="status">idle</div>
+</header>
+<div id="stage">
+  <iframe id="frame" width="1280" height="720" title="VOIDBORNE"></iframe>
+  <table id="tbl"><thead><tr><th>preset</th><th>canvas px</th><th>scale</th><th>frames</th><th>avg ms</th><th>p50</th><th>p95</th><th>p99</th><th>max</th><th>fps</th><th>&gt;33 ms</th><th>CPU avg ms</th><th>GPU avg ms</th><th>draw calls</th><th>load ms</th></tr></thead><tbody></tbody></table>
+  <div id="shots"></div>
+  <textarea id="json" readonly placeholder="results (JSON) appear here"></textarea>
+</div>
+<script>
+'use strict';
+// Query: ?auto=1&presets=low,medium,high&seconds=30&warmup=3&seed=1337&size=1280x720&file=../dist/voidborne.debug.html
+// When done: window.__benchDone = true and window.__benchResult holds the suite (tests/bench.mjs reads them).
+const Q = new URLSearchParams(location.search);
+const $ = (s) => document.querySelector(s);
+const frame = $('#frame');
+let suite = null;
+// presets: the game's low / medium / high; any other name in ?presets= (for example a later 'ultra') gets a box too
+const PRESETS = ['low', 'medium', 'high'];
+const wanted = Q.get('presets') ? Q.get('presets').split(',') : PRESETS;
+for (const p of [...PRESETS, ...wanted.filter((p) => !PRESETS.includes(p))]) {
+  const l = document.createElement('label');
+  l.innerHTML = `<input type="checkbox" name="p" value="${p}"${wanted.includes(p) ? ' checked' : ''}> ${p}`;
+  $('#presets').append(l);
+}
+if (Q.get('seconds')) $('#sec').value = Q.get('seconds');
+if (Q.get('seed')) $('#seed').value = Q.get('seed');
+if (Q.get('size')) {
+  const o = document.createElement('option');
+  o.textContent = Q.get('size');
+  $('#size').prepend(o);
+  $('#size').value = Q.get('size');
+}
+const status = (s) => ($('#status').textContent = s);
+const fmt = (x) => (x === undefined || x === null ? '-' : typeof x === 'number' ? (Math.round(x * 100) / 100).toString() : String(x));
+function runPreset(q, seconds, seed, warmup) {
+  return new Promise((resolve) => {
+    const file = Q.get('file') || '../dist/voidborne.debug.html';
+    const limit = (seconds + warmup + 180) * 1000; // generous: loading in software rendering can take a while
+    let done = false;
+    const finish = (r) => {
+      if (done) return;
+      done = true;
+      removeEventListener('message', onMsg);
+      clearTimeout(timer);
+      resolve(r);
+    };
+    const onMsg = (e) => {
+      if (e.source !== frame.contentWindow || !e.data) return;
+      if (e.data.type === 'vb-bench') finish(e.data.result);
+      else if (e.data.type === 'vb-bench-error') finish({ quality: q, error: e.data.message });
+    };
+    const timer = setTimeout(() => finish({ quality: q, error: 'timeout: no result from the game (see its console)' }), limit);
+    addEventListener('message', onMsg);
+    // run= makes every URL different before the '#', so the frame really reloads (a change after '#' alone would not)
+    frame.src = `${file}?bench=${seconds}&warmup=${warmup}&seeded=1&noscale=1&nostore=1&run=${q}-${Date.now()}#seed=${seed}&q=${q}`;
+  });
+}
+function show() {
+  const tb = $('#tbl tbody');
+  tb.innerHTML = '';
+  $('#shots').innerHTML = '';
+  for (const r of suite.results) {
+    const tr = document.createElement('tr');
+    if (r.error) tr.innerHTML = `<td>${r.quality}</td><td colspan="14" class="fail">${r.error}</td>`;
+    else {
+      const f = r.frame;
+      tr.innerHTML = [r.quality, r.canvas.join('×'), r.renderScale, f.frames, f.avgMs, f.p50Ms, f.p95Ms, f.p99Ms, f.maxMs, f.fps, f.over33Pct + '%', r.cpuMainThread.avgMs, r.gpu.avgMs, r.drawCalls.avg, r.loadMs].map((x) => `<td>${fmt(x)}</td>`).join('');
+      const d = document.createElement('details');
+      const kv = (o) => (o ? Object.entries(o).map(([k, v]) => `<tr><td>${k}</td><td>${fmt(v)}</td></tr>`).join('') : '<tr><td colspan="2">n/a</td></tr>');
+      d.innerHTML = `<summary>${r.quality}: per shot, per system, per pass · ${r.renderer} · GPU timer: ${r.gpuTimer}${r.errors ? ` · <span class="fail">errors: ${r.errors.slice(0, 200)}</span>` : ''}</summary>
+<table><tr><th>shot</th><th>frames</th><th>avg ms</th><th>p95</th><th>max</th><th>fps</th><th>CPU ms</th><th>GPU ms</th><th>draw calls</th></tr>${r.shots.map((s) => `<tr><td>${s.name}</td><td>${fmt(s.frames)}</td><td>${fmt(s.avgMs)}</td><td>${fmt(s.p95Ms)}</td><td>${fmt(s.maxMs)}</td><td>${fmt(s.fps)}</td><td>${fmt(s.cpuMs)}</td><td>${fmt(s.gpuMs)}</td><td>${fmt(s.drawCalls)}</td></tr>`).join('')}</table>
+<table><tr><th>CPU per system (ms / frame)</th><th></th></tr>${kv(r.cpuSystems)}</table>
+<table><tr><th>GPU per pass (ms / frame)</th><th></th></tr>${kv(r.gpu.passes)}</table>`;
+      $('#shots').append(d);
+    }
+    tb.append(tr);
+  }
+  $('#json').value = JSON.stringify(suite, null, 1);
+}
+async function start() {
+  const presets = [...document.querySelectorAll('input[name=p]:checked')].map((c) => c.value);
+  const seconds = Math.max(2, +$('#sec').value || 30);
+  const seed = +$('#seed').value | 0;
+  const warmup = Q.has('warmup') ? +Q.get('warmup') : 3;
+  const [w, h] = $('#size').value.split('x').map(Number);
+  frame.width = w;
+  frame.height = h;
+  $('#go').disabled = true;
+  $('#dl').disabled = true;
+  window.__benchDone = false;
+  suite = { kind: 'voidborne-bench-suite', version: 1, date: new Date().toISOString(), userAgent: navigator.userAgent, size: [w, h], seconds, warmup, seed, results: [] };
+  for (const q of presets) {
+    status(`running ${q} (${seconds + warmup} s after loading)…`);
+    suite.results.push(await runPreset(q, seconds, seed, warmup));
+    show();
+  }
+  frame.src = 'about:blank';
+  status(`done · ${new Date().toLocaleTimeString()}`);
+  $('#go').disabled = false;
+  $('#dl').disabled = false;
+  window.__benchResult = suite;
+  window.__benchDone = true;
+}
+$('#go').onclick = start;
+$('#dl').onclick = () => {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(suite, null, 1)], { type: 'application/json' }));
+  a.download = `voidborne-bench-${suite.date.replace(/[:.]/g, '-')}.json`;
+  a.click();
+};
+if (Q.get('auto') === '1') start();
+</script>
+</body>
+</html>

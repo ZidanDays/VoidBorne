@@ -1,5 +1,5 @@
 /* ---- sky bake: nebula, milky way, galaxies, faint stars -> cubemap ---- */
-const SKYBAKE_FS=`#version 300 es
+const SKYBAKE_FS = `#version 300 es
 precision highp float;precision highp int;
 in vec2 vUV;uniform int uFace;uniform vec3 uSeed;uniform vec3 uBand;uniform vec3 uGal[6];uniform float uGalSize[6];uniform float uNeb;
 out vec4 o;
@@ -25,16 +25,24 @@ void main(){float sc=vUV.x*2.0-1.0,tc=vUV.y*2.0-1.0;vec3 d;
  vec3 sp=d*260.0;vec3 c=floor(sp);float h=hash13(c);if(h>0.55){vec3 s=c+0.5+(hash33(c)-0.5)*0.7;float dd=length(sp-s);float mag=pow(hash13(c+7.0),4.0);col+=vec3(0.9,0.9,1.0)*exp(-dd*dd*14.0)*(0.08+mag*0.5);}
  o=vec4(col,1.0);}`;
 /* ---- live sky: cubemap + bright twinkling stars ---- */
-const SKY_FS=`#version 300 es
+const SKY_FS = `#version 300 es
 precision highp float;precision highp int;
 in vec2 vUV;uniform samplerCube uCube;uniform vec3 uRight,uUp,uFwd;uniform vec2 uTan,uJit;uniform float uTime;uniform vec3 uStarDir;
+#ifdef ULTRA
+uniform float uPx;   // Phase 6B 'ultra': smallest star sigma in radians (from CFG.ULTRA_POINT_MIN screen pixels)
+#endif
 out vec4 o;
 ${GL_NOISE}
 float stars(vec3 d,float scale,float dens,float k,out vec3 col){vec3 p=d*scale;vec3 c=floor(p);float h=hash13(c);col=vec3(0.0);if(h>dens)return 0.0;
  vec3 sp=c+0.5+(hash33(c+3.0)-0.5)*0.6;float dist=length(p-sp);float mag=pow(hash13(c+7.0),3.0);
  float tw=0.72+0.28*sin(uTime*(1.5+hash13(c+9.0)*5.0)+hash13(c+11.0)*100.0);
  float temp=hash13(c+5.0);col=mix(vec3(1.0,0.72,0.5),vec3(0.62,0.74,1.0),temp);
+#ifdef ULTRA
+ float s2=(0.25+mag)/(2.0*k);float px=uPx*scale;float se2=s2+px*px;   // point spread: never narrower than the pixel floor, same total light
+ return exp(-dist*dist/(2.0*se2))*(s2/se2)*(0.25+mag*3.0)*tw;}
+#else
  return exp(-dist*dist*k/(0.25+mag))*(0.25+mag*3.0)*tw;}
+#endif
 void main(){vec2 n=vUV*2.0-1.0-uJit;vec3 d=normalize(uFwd+uRight*n.x*uTan.x+uUp*n.y*uTan.y);
  vec3 col=texture(uCube,d).rgb;
  vec3 sc;float s=stars(d,38.0,0.42,70.0,sc);col+=sc*s;s=stars(d,95.0,0.5,60.0,sc);col+=sc*s*0.7;s=stars(d,180.0,0.55,55.0,sc);col+=sc*s*0.4;

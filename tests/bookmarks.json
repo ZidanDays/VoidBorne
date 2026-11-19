@@ -1,0 +1,671 @@
+{
+  "about": "Camera bookmarks for tests/shots.mjs. Each one loads dist/voidborne.debug.html?det=1&manual=1#seed=<seed>&q=<quality>, freezes the frame loop, optionally sets the clock ('time', s), places the camera with __VB.place(place) (see src/debug/vb-api.js), runs 1 frame, waits for streaming, runs frames-2 more frames and captures the canvas. 'dir' is the direction from the subject to the camera (\"sun\" = its lit side); 'dist' is in radii of the subject unless the place says metres. Phase 6B: '-ultra' bookmarks repeat a '-high' (or '-medium') view with the ultra preset for side-by-side comparison; hull-close and planet-close come in a high/ultra pair. Phase 6C: star-class and multiple-star views ('starclass' / 'sysplanet' places, see src/debug/vb-api.js); a bookmark's own 'cfg' is added to the URL as ?cfg= (home-variety turns on CFG.HOME_STAR_VARIETY).",
+  "size": [640, 360],
+  "frames": 6,
+  "tolerance": {
+    "channel": 3,
+    "pixels": 0.002
+  },
+  "bookmarks": [
+    {
+      "name": "spawn-1337-high",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "spawn"
+      }
+    },
+    {
+      "name": "open-space-1337-high",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "open"
+      }
+    },
+    {
+      "name": "nebula-1337-high",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "nebula",
+        "index": 0,
+        "dist": 2.2
+      }
+    },
+    {
+      "name": "star-corona-1337-high",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "star",
+        "dist": 3.2,
+        "dir": [0.5, 0.25, 0.83]
+      }
+    },
+    {
+      "name": "flare-1337-high",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "flare",
+        "dist": 3.2,
+        "dir": [0.5, 0.25, 0.83]
+      }
+    },
+    {
+      "name": "planet-rocky-1337-high",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "planet",
+        "type": 0,
+        "dist": 2.4,
+        "dir": "sun"
+      }
+    },
+    {
+      "name": "planet-gas-1337-high",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "planet",
+        "type": 1,
+        "dist": 2.6,
+        "dir": "sun"
+      }
+    },
+    {
+      "name": "planet-ice-1337-high",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "planet",
+        "type": 2,
+        "dist": 2.4,
+        "dir": "sun"
+      }
+    },
+    {
+      "name": "planet-lava-1337-high",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "planet",
+        "type": 3,
+        "dist": 2.4,
+        "dir": "sun"
+      }
+    },
+    {
+      "name": "planet-day-1337-high",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "planet",
+        "type": 4,
+        "dist": 1.25,
+        "dir": "sun"
+      }
+    },
+    {
+      "name": "planet-night-1337-high",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "planet",
+        "type": 4,
+        "dist": 1.25,
+        "dir": [0.2, 0.25, 0.95]
+      }
+    },
+    {
+      "name": "moon-1337-high",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "moon",
+        "dist": 4
+      }
+    },
+    {
+      "name": "ringed-planet-1337-high",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "ringed",
+        "dist": 2.4,
+        "dir": [0.3, 0.35, 0.9]
+      }
+    },
+    {
+      "name": "belt-1337-high",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "belt",
+        "angle": 0.8
+      }
+    },
+    {
+      "name": "school-1337-high",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "school",
+        "index": 0,
+        "dist": 70
+      }
+    },
+    {
+      "name": "whale-1337-high",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "whale",
+        "index": 0,
+        "dist": 1
+      }
+    },
+    {
+      "name": "medusa-1337-high",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "medusa",
+        "index": 0,
+        "dist": 220
+      }
+    },
+    {
+      "name": "wreck0-1337-high",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "wreck",
+        "index": 0,
+        "dist": 2.5,
+        "dir": [0.6, 0.3, 0.75]
+      }
+    },
+    {
+      "name": "breach-1337-high",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "breach",
+        "dist": 12
+      }
+    },
+    {
+      "name": "interior-1337-high",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "interior"
+      }
+    },
+    {
+      "name": "station-1337-medium",
+      "seed": 1337,
+      "quality": "medium",
+      "place": {
+        "at": "station",
+        "dist": 3,
+        "dir": [-0.5, 0.2, 0.8]
+      }
+    },
+    {
+      "name": "blackhole-1337-high",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "landmark",
+        "kind": "blackhole",
+        "dist": 520
+      }
+    },
+    {
+      "name": "pulsar-1337-high",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "landmark",
+        "kind": "pulsar",
+        "dist": 320
+      }
+    },
+    {
+      "name": "system-77-medium",
+      "seed": 77,
+      "quality": "medium",
+      "place": {
+        "at": "star",
+        "dist": 14,
+        "dir": [0.3, 0.7, 0.65]
+      }
+    },
+    {
+      "name": "nebula-77-medium",
+      "seed": 77,
+      "quality": "medium",
+      "place": {
+        "at": "nebula",
+        "index": 2,
+        "dist": 2.2
+      }
+    },
+    {
+      "name": "blackhole-77-medium",
+      "seed": 77,
+      "quality": "medium",
+      "place": {
+        "at": "landmark",
+        "kind": "blackhole",
+        "dist": 520
+      }
+    },
+    {
+      "name": "system-7-low",
+      "seed": 7,
+      "quality": "low",
+      "place": {
+        "at": "star",
+        "dist": 14,
+        "dir": [0.2, 0.6, 0.77]
+      }
+    },
+    {
+      "name": "wreck0-7-low",
+      "seed": 7,
+      "quality": "low",
+      "place": {
+        "at": "wreck",
+        "index": 0,
+        "dist": 2.5
+      }
+    },
+    {
+      "name": "sector-42-medium",
+      "seed": 42,
+      "quality": "medium",
+      "place": {
+        "at": "sector",
+        "dist": 6
+      }
+    },
+    {
+      "name": "open-space-1337-ultra",
+      "seed": 1337,
+      "quality": "ultra",
+      "place": {
+        "at": "open"
+      }
+    },
+    {
+      "name": "planet-rocky-1337-ultra",
+      "seed": 1337,
+      "quality": "ultra",
+      "place": {
+        "at": "planet",
+        "type": 0,
+        "dist": 2.4,
+        "dir": "sun"
+      }
+    },
+    {
+      "name": "planet-ice-1337-ultra",
+      "seed": 1337,
+      "quality": "ultra",
+      "place": {
+        "at": "planet",
+        "type": 2,
+        "dist": 2.4,
+        "dir": "sun"
+      }
+    },
+    {
+      "name": "planet-day-1337-ultra",
+      "seed": 1337,
+      "quality": "ultra",
+      "place": {
+        "at": "planet",
+        "type": 4,
+        "dist": 1.25,
+        "dir": "sun"
+      }
+    },
+    {
+      "name": "whale-1337-ultra",
+      "seed": 1337,
+      "quality": "ultra",
+      "place": {
+        "at": "whale",
+        "index": 0,
+        "dist": 1
+      }
+    },
+    {
+      "name": "wreck0-1337-ultra",
+      "seed": 1337,
+      "quality": "ultra",
+      "place": {
+        "at": "wreck",
+        "index": 0,
+        "dist": 2.5,
+        "dir": [0.6, 0.3, 0.75]
+      }
+    },
+    {
+      "name": "station-1337-ultra",
+      "seed": 1337,
+      "quality": "ultra",
+      "place": {
+        "at": "station",
+        "dist": 3,
+        "dir": [-0.5, 0.2, 0.8]
+      }
+    },
+    {
+      "name": "hull-close-1337-high",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "wreck",
+        "index": 0,
+        "dist": 0.75,
+        "dir": [0.6, 0.3, 0.75]
+      }
+    },
+    {
+      "name": "planet-close-1337-high",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "planet",
+        "type": 0,
+        "dist": 1.12,
+        "dir": "sun"
+      }
+    },
+    {
+      "name": "hull-close-1337-ultra",
+      "seed": 1337,
+      "quality": "ultra",
+      "place": {
+        "at": "wreck",
+        "index": 0,
+        "dist": 0.75,
+        "dir": [0.6, 0.3, 0.75]
+      }
+    },
+    {
+      "name": "planet-close-1337-ultra",
+      "seed": 1337,
+      "quality": "ultra",
+      "place": {
+        "at": "planet",
+        "type": 0,
+        "dist": 1.12,
+        "dir": "sun"
+      }
+    },
+    {
+      "name": "star-red-dwarf-1337",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "starclass",
+        "cls": "M",
+        "kind": "single",
+        "dist": 3.2,
+        "dir": [0.5, 0.25, 0.83]
+      }
+    },
+    {
+      "name": "star-blue-giant-1337",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "starclass",
+        "cls": "O",
+        "dist": 3.2,
+        "dir": [0.5, 0.25, 0.83]
+      }
+    },
+    {
+      "name": "star-white-dwarf-1337",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "starclass",
+        "cls": "D",
+        "kind": "single",
+        "dist": 16,
+        "dir": [0.5, 0.25, 0.83]
+      }
+    },
+    {
+      "name": "star-neutron-7",
+      "seed": 7,
+      "quality": "high",
+      "place": {
+        "at": "starclass",
+        "cls": "N",
+        "dist": 30,
+        "dir": [0.5, 0.25, 0.83]
+      }
+    },
+    {
+      "name": "binary-close-1337",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "starclass",
+        "kind": "close",
+        "dist": 2.2,
+        "dir": [0.3, 0.5, 0.81]
+      }
+    },
+    {
+      "name": "binary-planet-1337-high",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "sysplanet",
+        "kind": "close",
+        "index": 0,
+        "dist": 2.6
+      }
+    },
+    {
+      "name": "binary-planet-1337-low",
+      "seed": 1337,
+      "quality": "low",
+      "place": {
+        "at": "sysplanet",
+        "kind": "close",
+        "index": 0,
+        "dist": 2.6
+      }
+    },
+    {
+      "name": "wide-planet-1337",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "sysplanet",
+        "kind": "wide",
+        "index": 0,
+        "dist": 2.6
+      }
+    },
+    {
+      "name": "triple-1337",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "starclass",
+        "kind": "triple",
+        "dist": 2.5,
+        "dir": [0.3, 0.5, 0.81]
+      }
+    },
+    {
+      "name": "home-variety-1337",
+      "seed": 1337,
+      "quality": "high",
+      "cfg": "HOME_STAR_VARIETY:true",
+      "place": {
+        "at": "star",
+        "dist": 3.2,
+        "dir": [0.5, 0.25, 0.83]
+      }
+    },
+    {
+      "name": "type-ocean-1337",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "ptype",
+        "type": 8,
+        "dist": 1.8
+      }
+    },
+    {
+      "name": "type-desert-1337",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "ptype",
+        "type": 9,
+        "dist": 1.8
+      }
+    },
+    {
+      "name": "type-desert-1337-low",
+      "seed": 1337,
+      "quality": "low",
+      "place": {
+        "at": "ptype",
+        "type": 9,
+        "dist": 1.8
+      }
+    },
+    {
+      "name": "type-sulfur-1337",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "ptype",
+        "type": 10,
+        "dist": 2
+      }
+    },
+    {
+      "name": "type-crystal-1337",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "ptype",
+        "type": 11,
+        "dist": 1.8
+      }
+    },
+    {
+      "name": "type-crystal-1337-ultra",
+      "seed": 1337,
+      "quality": "ultra",
+      "place": {
+        "at": "ptype",
+        "type": 11,
+        "dist": 1.8
+      }
+    },
+    {
+      "name": "type-eyeball-1337",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "ptype",
+        "type": 12,
+        "dist": 2.2,
+        "side": 0.9
+      }
+    },
+    {
+      "name": "type-hotgas-1337",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "ptype",
+        "type": 13,
+        "dist": 2.2
+      }
+    },
+    {
+      "name": "type-dwarf-1337",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "ptype",
+        "type": 14,
+        "dist": 2.2
+      }
+    },
+    {
+      "name": "rogue-1337",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "ptype",
+        "type": 15,
+        "dist": 2.4,
+        "range": 14
+      }
+    },
+    {
+      "name": "moon-volcanic-1337",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "ptype",
+        "moon": 16,
+        "dist": 4,
+        "plume": 1
+      }
+    },
+    {
+      "name": "moon-geyser-1337",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "ptype",
+        "moon": 17,
+        "dist": 4,
+        "plume": 1
+      }
+    },
+    {
+      "name": "moon-irregular-1337",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "ptype",
+        "moon": 18,
+        "dist": 3
+      }
+    },
+    {
+      "name": "ring-variety-1337",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "ptype",
+        "ring": 1,
+        "dist": 3.2,
+        "dir": [0.3, 0.45, 0.84]
+      }
+    }
+  ]
+}
