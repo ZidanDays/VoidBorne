@@ -31,6 +31,7 @@ const PP_N = 80;
 const PT = { ROCKY: 0, GAS: 1, ICE: 2, LAVA: 3, LIVING: 4, MOON: 5, OCEAN: 8, DESERT: 9, TOXIC: 10, CRYSTAL: 11, EYEBALL: 12, HOTGAS: 13, DWARF: 14, ROGUE: 15, MVOLC: 16, MICE: 17, MIRR: 18 }; // prettier-ignore
 const PT_NEW = [8, 9, 10, 11, 12, 13, 14, 15]; // new planet types (scanner classes p8..p15)
 const PT_MOONS = [16, 17, 18]; // special moons (scanner classes moon16..moon18)
+const PT_COMET = 19; // Phase 6E: a comet nucleus (drawn with the same shader; scanner class 'comet')
 // values not listed are the defaults of PP_DEF (no sea, no pools, no clouds, white clouds)
 const PP_DEF = {
   seaLo: -1,
@@ -230,6 +231,7 @@ const PSETS = {
     detC: 2,
   }, // ice moon (geysers) // prettier-ignore
   18: Object.assign({}, ROCKY_SET, { irrK: 3 }), // irregular moon
+  19: Object.assign({}, ROCKY_SET, { irrK: 3.5, patchK: 0.7, spec: 0.25, gloss: 0.6 }), // Phase 6E comet nucleus: dark crust, bright ice patches
 };
 // palettes of the new types: c1 / c2 / c3 / atmosphere colour / atmosphere strength; R = a hash stream (never the world RNG)
 const PALX = {
@@ -267,6 +269,10 @@ const PALX = {
   18: (R) => {
     const k = 0.8 + R() * 0.3;
     return { c1: [0.2 * k, 0.18 * k, 0.16], c2: [0.5 * k, 0.46 * k, 0.42], c3: [0.35, 0.32, 0.3], atmo: [0, 0, 0], ak: 0 };
+  },
+  19: (R) => {
+    const k = 0.8 + R() * 0.3;
+    return { c1: [0.06 * k, 0.055 * k, 0.05], c2: [0.16 * k, 0.15 * k, 0.14], c3: [0.75, 0.8, 0.85], atmo: [0, 0, 0], ak: 0 };
   },
 };
 function ppPack(set) {
@@ -347,7 +353,7 @@ function planetParams(t, R) {
     if (R() < 0.5) a.set([0.6, 0.4, 1], K.auroraCol);
   } else if (t === 16) {
     j(K.emisK, 1.2, 2);
-  } else if (t === 18) {
+  } else if (t === 18 || t === 19) {
     // two big lobes roughly opposite (an elongated body) and two dents: the CPU collision uses the same numbers
     j(K.irrK, 2.5, 4);
     const dir = () => {

@@ -15,6 +15,7 @@ precision highp float;precision highp int;
 layout(location=0) in vec3 aBase;layout(location=1) in vec4 aSeed;layout(location=2) in vec3 aCol;
 uniform mat4 uVP;uniform vec3 uCam,uOff,uCamMod;uniform float uTime,uPR;uniform int uMode;out float vA;out vec3 vCol;out float vFz;
 uniform vec4 uPl,uPl2;uniform vec3 uPlC;   // Phase 6D plume (mode 6): direction + height (m) ; kind (0 volcanic, 1 geyser), size (m), alpha, cycles/s ; colour
+uniform vec4 uTl,uTl2,uTl3;uniform vec3 uTlC;   // Phase 6E comet tail (mode 7): away-from-star dir + length (m) ; direction of motion + width (m) ; kind (0 ion, 1 dust), size (m), alpha, flow /s ; colour
 #ifdef ULTRA
 uniform float uPtMin;   // Phase 6B 'ultra': smallest sprite size in render pixels; smaller points get bigger and dimmer (same light)
 #endif
@@ -29,6 +30,11 @@ void main(){vec3 p;float sz;vCol=vec3(0.8,0.85,1.0);
   else if(aSeed.y<0.35){hg=H*ph*(0.5+aSeed.z*0.5);lat=sd*H*ph*0.08;}   // volcanic: a glowing column above the vent ...
   else{hg=H*4.0*ph*(1.0-ph)*(0.6+0.4*aSeed.y);lat=sd*H*ph*(0.25+0.55*aSeed.z);}   // ... and an umbrella of ballistic arcs that fall back around it
   p=uOff+up*hg+lat;sz=uPl2.y*(0.5+1.5*ph);vA=(1.0-ph)*smoothstep(0.0,0.08,ph)*uPl2.z;vCol=uPlC*(1.0+0.8*(1.0-ph)*(1.0-uPl2.x));}
+ else if(uMode==7){float sa=fract(aSeed.x+uTime*uTl3.w);vec3 ad=uTl.xyz;vec3 sd=normalize(aSeed.yzw-0.5+vec3(1e-4));sd=normalize(sd-ad*dot(sd,ad)+vec3(1e-5));   // Phase 6E comet tails
+  float coma=step(fract(aSeed.w*5.13),0.14);float s=mix(sa,sa*0.05,coma);float wd=uTl2.w*(0.12+pow(s,0.6))*fract(aSeed.y*7.31+0.13);
+  vec3 off=ad*(uTl.w*s)+sd*wd;if(uTl3.x>0.5)off-=uTl2.xyz*(uTl.w*0.4*s*s);   // the dust tail curves back along the orbit
+  if(coma>0.5)off=normalize(aSeed.zxy-0.5+vec3(1e-4))*uTl2.w*0.35*fract(aSeed.z*3.7);   // a round coma around the nucleus
+  p=uOff+off;sz=uTl3.y*(0.6+1.6*s)*(1.0+coma);vA=uTl3.z*(1.0-s)*smoothstep(0.0,0.03,s+coma)*(0.45+0.55*fract(aSeed.z*13.7))*(1.0+coma);vCol=uTlC;}
  else{p=aBase+uOff;vA=1.0;vCol=aCol;} // mode 4: distant stars of other sectors, constant pixel size
  vec4 cp=uVP*vec4(p,1.0);gl_Position=cp;
 #ifdef ULTRA

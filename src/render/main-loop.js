@@ -112,6 +112,7 @@ function runFrame(now) {
       audioTick(dt);
       starVoiceTick(dt); // Phase 6C: signature of the nearest classed star
       planetVoiceTick(dt); // Phase 6D: new planet types, rogue planets, plume moons
+      deepVoiceTick(dt); // Phase 6E: comets, outer belts, graveyards, the ancient ring, remnants and nebulae
       saveTick(dt);
     } else if (!started) {
       time += dt;

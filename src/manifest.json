@@ -17,6 +17,7 @@
         "i18n/strings-6b.js",
         "i18n/strings-6c.js",
         "i18n/strings-6d.js",
+        "i18n/strings-6e.js",
         "input/bindings.js",
         "i18n/language.js",
         "core/boot.js",
@@ -68,13 +69,21 @@
     {
       "name": "audio",
       "weight": 1,
-      "modules": ["audio/engine.js", "audio/worklet.js", "audio/mood.js", "audio/star-voice.js", "audio/planet-voice.js"]
+      "modules": [
+        "audio/engine.js",
+        "audio/worklet.js",
+        "audio/mood.js",
+        "audio/star-voice.js",
+        "audio/planet-voice.js",
+        "audio/deep-voice.js"
+      ]
     },
     {
       "name": "open-space",
       "weight": 2,
       "modules": [
         "openworld/star-classes.js",
+        "openworld/small-bodies.js",
         "openworld/sectors.js",
         "openworld/ship-logs.js",
         "openworld/sector-generator.js",

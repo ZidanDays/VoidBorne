@@ -21,9 +21,9 @@ const PLANET_VOX = {
   moon17: { f: [], type: 'sine', cut: 8000, noise: 0.25, nf: 3500, lfo: 0, tick: 0, gain: 0.22, burst: 7 },
 };
 const PVOX = { cur: null, body: null, capT: 0, evT: 0 };
-function planetVoiceBuild(b, key) {
+function planetVoiceBuild(b, key, tab) {
   const AC = AUD.ctx,
-    v = PLANET_VOX[key];
+    v = (tab || PLANET_VOX)[key]; // Phase 6E: the deep-space voices (deep-voice.js) pass their own table
   const p = makePanner(b.pos, Math.max(60, b.r * 2));
   const out = AC.createGain();
   out.gain.value = 0;

@@ -108,6 +108,47 @@ function sectorMeta(sx, sy, sz) {
       m.name = m.rogue.name; // the map, warp and toasts name the planet (the unused star name is replaced; nothing else reads it)
     }
   }
+  // Phase 6E: deep-space landmarks and ship graveyards (streams of their own; never near home). A block of LANDMARK_BLOCK^3
+  // sectors picks one candidate sector by a hash; with RARE_LANDMARK it becomes a landmark: an empty sector gets a supernova
+  // remnant or a planetary nebula, a system gets the broken ancient ring. A system far enough out may hold a graveyard.
+  if (!m.home) {
+    const cheb = Math.max(Math.abs(sx), Math.abs(sy), Math.abs(sz));
+    const B = CFG.LANDMARK_BLOCK,
+      bx = Math.floor(sx / B),
+      by = Math.floor(sy / B),
+      bz = Math.floor(sz / B);
+    const gb = mkRng(hash32(CFG.SEED ^ 0x51ed270b, bx, by, bz));
+    const cand = [bx * B + ((gb() * B) | 0), by * B + ((gb() * B) | 0), bz * B + ((gb() * B) | 0)];
+    const on = gb() < CFG.RARE_LANDMARK;
+    const kv = gb();
+    if (on && cheb >= CFG.LANDMARK_MIN_DIST && cand[0] === sx && cand[1] === sy && cand[2] === sz && !m.rogue) {
+      const gl = mkRng(hash32(CFG.SEED ^ 0x0de5ba11, sx, sy, sz));
+      const nm = cap(TYPE_SYL[15][(gl() * 10) | 0] + SYL[(gl() * SYL.length) | 0]);
+      if (m.exists) {
+        if (CFG.ANCIENT_RING) m.landmark = { kind: 'ring', name: nm, seed: hash32(CFG.SEED ^ 0x6e1, sx, sy, sz) };
+      } else if (kv < 0.5 ? CFG.SNR : CFG.PLANETARY_NEBULA) {
+        const kind = kv < 0.5 ? 'snr' : 'pn';
+        const R = kind === 'snr' ? 9000 + gl() * 5000 : 2500 + gl() * 1500;
+        const z = gl() * 2 - 1,
+          a = gl() * TAU,
+          sq = Math.sqrt(1 - z * z);
+        m.landmark = {
+          kind,
+          name: nm,
+          R,
+          axis: [sq * Math.cos(a), z, sq * Math.sin(a)],
+          age: gl(),
+          seed: hash32(CFG.SEED ^ 0x6e2, sx, sy, sz),
+        };
+        m.name = nm; // the map, warp and toasts name the landmark (the unused star name is replaced)
+        m.wr = R * 1.15; // a warp arrives outside the shell (warp-autopilot.js)
+      }
+    }
+    if (CFG.GRAVEYARD && m.exists && !m.landmark && cheb >= 2) {
+      const gg = mkRng(hash32(CFG.SEED ^ 0x6ea7e5, sx, sy, sz));
+      if (gg() < CFG.GRAVEYARD_CHANCE) m.graveyard = { seed: hash32(CFG.SEED ^ 0x6e3, sx, sy, sz) };
+    }
+  }
   if (m.home && HOME_STAR.cls) {
     m.cls = HOME_STAR.cls;
     m.vr = HOME_STAR.vr;

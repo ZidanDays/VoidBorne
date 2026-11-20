@@ -36,7 +36,7 @@ function scanCandidates() {
     near = CFG.SCAN_RANGE,
     far = CFG.SCAN_RANGE * 12;
   if (player.inside) {
-    if (W0.big && INT.sealedOpen) {
+    if (W0.big && INT.sealedOpen && !player.insideW) {
       const s = secrets[3];
       out.push({ key: 'artifact', cls: 'artifact', name: s.name, pos: s.pos, r: 2.2, range: 60, mode: 0, ref: s });
     }
@@ -75,6 +75,29 @@ function scanCandidates() {
       key = 'landmark:' + landmarks.indexOf(p.ref);
       range = near * 3;
       if (cls === 'blackhole') mode = 1;
+    } else if (p.kind === 'comet') {
+      // Phase 6E: comets, outer belts, graveyards, the ancient ring (and its monolith), remnants and nebulae
+      cls = 'comet';
+      key = 'comet:' + p.name;
+      range = far;
+      mode = 1;
+    } else if (p.kind === 'kbelt') {
+      cls = 'kbelt';
+      key = 'kbelt:' + p.ref.id;
+      range = near * 4;
+    } else if (p.kind === 'graveyard') {
+      cls = 'graveyard';
+      key = 'graveyard:' + p.ref.id;
+      range = near * 6;
+    } else if (p.kind === 'aring') {
+      cls = p.mono ? 'amono' : 'aring';
+      key = (p.mono ? 'amono:' : 'aring:') + p.ref.id;
+      range = p.mono ? near : far;
+    } else if (p.kind === 'lmark') {
+      cls = p.ref.kind;
+      key = 'lmark:' + p.ref.seed;
+      range = far * 3;
+      mode = 1;
     } else continue;
     out.push({
       key,
@@ -230,6 +253,38 @@ const COMPS = {
     ['ice', 10, 25],
     ['organic', 'metals'],
   ],
+  // Phase 6E
+  comet: [
+    ['ice', 40, 60],
+    ['dust', 20, 35],
+    ['carbon', 'organic'],
+  ],
+  kbelt: [
+    ['ice', 50, 70],
+    ['silicate', 15, 30],
+    ['methane', 'nitrogen'],
+  ],
+  graveyard: [
+    ['steel', 50, 70],
+    ['alloy', 15, 30],
+    ['glass', 'carbon'],
+  ],
+  aring: [
+    ['unknown', 55, 75],
+    ['alloy', 10, 25],
+    ['silicate', 'carbon'],
+  ], // mostly the Monolith's material (lore.aring)
+  amono: [['unknown', 100, 100]],
+  snr: [
+    ['hydrogen', 60, 75],
+    ['oxygen', 5, 15],
+    ['iron', 'sulfur'],
+  ],
+  pn: [
+    ['hydrogen', 65, 80],
+    ['helium', 15, 25],
+    ['oxygen', 'nitrogen'],
+  ],
   moon16: [
     ['sulfur', 35, 55],
     ['silicate', 25, 40],
@@ -274,6 +329,7 @@ const COMPS = {
   artifact: [['lattice', 55, 70], ['carbon', 15, 30], ['metals']],
   pulsar: [['neutron', 100, 100]],
 };
+const E6CLS = ['comet', 'kbelt', 'graveyard', 'aring', 'amono', 'snr', 'pn']; // Phase 6E scanner classes
 function compStr(def, R) {
   if (!def) return t('mat.none');
   const a = def[0],
@@ -344,11 +400,21 @@ function scanInfo(c) {
                               ? myr(20, 900)
                               : cls === 'pulsar'
                                 ? myr(1, 40)
-                                : t('age.none');
+                                : cls === 'comet' || cls === 'kbelt'
+                                  ? gyr(4, 4.6)
+                                  : cls === 'graveyard'
+                                    ? yr(200, 2400)
+                                    : cls === 'aring' || cls === 'amono'
+                                      ? t('age.older')
+                                      : cls === 'snr'
+                                        ? yr(800, 9000)
+                                        : cls === 'pn'
+                                          ? yr(4000, 20000)
+                                          : t('age.none');
   const comp = compStr(COMPS[cls] || null, R);
   let status = planet
     ? pool(cls === 'p4' ? 'st.living' : pt >= 8 ? 'st.' + cls : 'st.planet')
-    : cls === 'moon' || cls === 'star' || sc || cls === 'wreck' || cls === 'station' || smoon
+    : cls === 'moon' || cls === 'star' || sc || cls === 'wreck' || cls === 'station' || smoon || E6CLS.indexOf(cls) >= 0
       ? pool('st.' + cls)
       : cls === 'artifact'
         ? t('st.artifact', { n: nfmt(30 + R() * 20, 1) })

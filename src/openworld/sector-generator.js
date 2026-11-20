@@ -10,11 +10,12 @@ function finMB(mb) {
 function genSector(meta, bakeAo, planetsOnly) {
   _s = meta.seed >>> 0 || 1;
   if (meta.rogue) return genRogue(meta);
+  if (!meta.sys && meta.e6 && meta.e6.lm && meta.e6.lm.kind !== 'ring') return genLandmarkSector(meta); // Phase 6E: remnant / nebula
   const C = meta.star;
   const S = meta.sys;
   const V = meta.pv;
   let plumes = 0;
-  const out = { key: meta.key, planets: [], wrecks: [], beacon: null, med: null, radius: 0 };
+  const out = { key: meta.key, planets: [], wrecks: [], beacon: null, med: null, radius: 0, comets: [] };
   const np = 2 + ((rnd() * 4) | 0);
   let orbit = 650 + rr(0, 300);
   if (S && S.inner > orbit) orbit = S.inner; // circumbinary planets start beyond the pair's unstable zone
@@ -155,7 +156,13 @@ function genSector(meta, bakeAo, planetsOnly) {
       );
     out.med = { c, col, inst: a };
   }
+  genSector6E(out, meta, C, orbit, free, bakeAo); // Phase 6E: comets, outer belt + edge dwarfs, ancient ring, graveyard (after everything older)
   return out;
+}
+// Phase 6E: an empty sector holding a supernova remnant or a planetary nebula: only its central star (built at instantiation)
+function genLandmarkSector(meta) {
+  const lm = meta.e6.lm;
+  return { key: meta.key, planets: [], wrecks: [], beacon: null, med: null, radius: lm.R * 1.3 + 1500, comets: [], landmark: lm };
 }
 // Phase 6D: a rogue planet: no star, no wrecks; dark, glowing faintly (volcanic cracks, aurora or haze), with 0-1 dark moons
 function genRogue(meta) {
@@ -230,6 +237,8 @@ function workerSource() {
     xfq,
     instQ,
     bakeAO,
+    icoMesh, // Phase 6E: the enterable graveyard hulls are big ships (genShip(true): artifact mesh, crate placement)
+    crateClear,
     genShip,
     genLog,
     finMB,
@@ -244,10 +253,21 @@ function workerSource() {
     plumeOf,
     ringVariety,
     genRogue,
+    cometPos,
+    cometVel,
+    cometClear,
+    edgeOf,
+    genComets,
+    beltInst,
+    genOuterBelt,
+    genGraveyard,
+    genAncientRing,
+    genSector6E,
+    genLandmarkSector,
     genSector,
     collectBuffers,
   ];
-  let src = "'use strict';let _s=1;const PI=Math.PI,TAU=PI*2,INST=" + INST + ';\n';
+  let src = "'use strict';let _s=1;const PI=Math.PI,TAU=PI*2,INST=" + INST + ',INSTA=' + INSTA + ';\n';
   src +=
     'const SYL=' +
     JSON.stringify(SYL) +
@@ -267,6 +287,10 @@ function workerSource() {
     JSON.stringify(TYPE_SYL) +
     ',RING_COLS=' +
     JSON.stringify(RING_COLS) +
+    ',BULKHEADS=' +
+    JSON.stringify(BULKHEADS) +
+    ',CORRIDOR=' +
+    JSON.stringify(CORRIDOR) +
     ',LOG_N=' +
     LOG_N +
     ',LOG_EN=' +

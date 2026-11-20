@@ -65,7 +65,7 @@ function interiorTick(dt) {
     el.style.opacity = p ? 1 : 0;
     if (isTouch) $('#tuse').style.display = p ? 'flex' : 'none';
   }
-  if (player.inside) {
+  if (player.inside && !player.insideW) {
     if (!INT.entered) {
       INT.entered = true;
     }

@@ -316,6 +316,15 @@ function sectorMsg(meta) {
         }
       : null,
     rogue: meta.rogue || null,
+    // Phase 6E: small bodies, outer belt, graveyard and landmark settings (the generator never reads CFG: it may run in the worker)
+    e6: {
+      comets: CFG.COMETS ? [CFG.COMET_CHANCE, CFG.COMETS_MAX] : null,
+      belt: CFG.OUTER_BELT ? [CFG.OUTER_BELT_CHANCE, CFG.OUTER_BELT_ROCKS, CFG.EDGE_DWARFS_MAX] : null,
+      gy: meta.graveyard ? [CFG.GRAVEYARD_WRECKS, Math.max(1, Math.min(2, CFG.GRAVEYARD_ENTER))] : null,
+      lm: meta.landmark || null,
+      hz: s ? s.hz : CFG.HZ_BASE,
+      starR: meta.r,
+    },
   };
 }
 // soft light plausibility (inside genSector, worker too): living worlds in the habitable band, lava worlds close, ice worlds far.

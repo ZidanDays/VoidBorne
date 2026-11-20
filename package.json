@@ -1,6 +1,6 @@
 {
   "name": "voidborne",
-  "version": "6.0.0-d",
+  "version": "6.0.0-e",
   "private": true,
   "description": "A procedural universe in one self-contained HTML file: raw WebGL2 + Web Audio, no assets, no libraries.",
   "type": "module",

@@ -28,6 +28,14 @@
 //            nothing inside the sector star or inside a planet (moon orbits crossing a planet: warning only).
 //            Phase 6D: known planet / moon types, parameter sets, plume-moon cap, irregular moons clear of their planet, rogue
 //            planets never next to home and alone in their starless sector (the two nearest are generated, worker and main)
+//            Phase 6E: comets (cap, orbit clear of every star and planet), outer belt (rock cap, beyond the planets, edge dwarfs
+//            cap and inside the belt), graveyards (hull caps, no overlaps, enterable hulls have a breach), the ancient ring (clear
+//            of planets and the belt). In the 13 x 3 x 13 sectors around home: landmarks at least LANDMARK_MIN_DIST from home, at
+//            most one per LANDMARK_BLOCK^3 block, a ring only in a system and a remnant / nebula only in an empty sector;
+//            graveyards only in systems two or more sectors out. The nearest remnant, nebula, ring and graveyard sector are
+//            generated as well (worker and main thread). Landmark and N-class counts are summed up at the end (rarity).
+//            The digest leaves out the Phase 6E fields when they are empty, so --cfg COMETS:false,OUTER_BELT:false
+//            reproduces the Phase 6D digest (the neighbour sectors never hold a graveyard or a landmark).
 //            Phase 6C: every star of the system (cap CFG.MAX_STARS, known class, no NaN); nothing inside a star or inside
 //            the sphere a close pair sweeps; planets of a close pair beyond CFG.BINARY_CLEAR separations, of a wide pair
 //            within 0.28 x the companion's distance. The star classes and kinds found are summed up at the end.
@@ -58,6 +66,7 @@ const browserName = opt('--browser', 'chromium');
 const quality = opt('--quality', 'low');
 const timeout = +opt('--timeout', 180000);
 const compare = opt('--compare') ? JSON.parse(readFileSync(abs(opt('--compare')), 'utf8')) : null;
+const cfgOv = opt('--cfg', ''); // Phase 6E: CFG overrides (?cfg=, see core/det.js), e.g. --cfg COMETS:false,OUTER_BELT:false
 const htmlOut = flag('--no-html') ? null : abs(opt('--html', 'tests/out/seed-report.html'));
 const retries = Math.max(0, +opt('--retries', 1));
 
@@ -177,6 +186,7 @@ const SECTOR_CHECK = async () => {
     stars: [], // Phase 6C: per neighbour sector: key, kind, classes
     types: [], // Phase 6D: per neighbour planet: type; per moon: 'm' + type; per ring: 'ring'
     rogues: 0, // Phase 6D: rogue planets in the scanned 13 x 3 x 13 sectors around home
+    e6: { snr: 0, pn: 0, ring: 0, gy: 0, nstar: 0, comets: 0, belts: 0, dwarfs: 0, gen: [] }, // Phase 6E (scanned area / generated)
   };
   // home world: only fields fixed at generation time (moving things are described by their path/centre)
   const home = {
@@ -226,11 +236,41 @@ const SECTOR_CHECK = async () => {
   const rmetas = rogues.slice(0, 2).map((r) => r[1]);
   const nN = metas.length;
   metas.push(...rmetas);
-  const mains = metas.map((m) => genMain(m));
-  let workerOuts = null;
-  try {
+  // Phase 6E: placement of landmarks and graveyards in the scanned area; the nearest of each kind is generated too
+  const blocks = new Map(),
+    nearest = {};
+  for (let x = -6; x <= 6; x++)
+    for (let y = -1; y <= 1; y++)
+      for (let z = -6; z <= 6; z++) {
+        const m = sectorMeta(x, y, z),
+          cheb = Math.max(Math.abs(x), Math.abs(y), Math.abs(z)),
+          d2 = x * x + y * y + z * z;
+        if (m.cls === 'N') out.e6.nstar++;
+        const near = (k) => (!nearest[k] || d2 < nearest[k][0]) && (nearest[k] = [d2, m]);
+        if (m.landmark) {
+          const L = m.landmark,
+            B = CFG.LANDMARK_BLOCK,
+            bk = [x, y, z].map((v) => Math.floor(v / B)).join(',');
+          out.e6[L.kind === 'ring' ? 'ring' : L.kind]++;
+          near(L.kind);
+          if (cheb < CFG.LANDMARK_MIN_DIST)
+            out.fails.push(`sector ${m.key}: landmark ${L.kind} ${cheb} sectors from home (min ${CFG.LANDMARK_MIN_DIST})`);
+          if (blocks.has(bk)) out.fails.push(`sector ${m.key}: second landmark in block ${bk} (${blocks.get(bk)})`);
+          blocks.set(bk, m.key);
+          if (L.kind === 'ring' ? !m.exists : m.exists || m.rogue) out.fails.push(`sector ${m.key}: ${L.kind} in the wrong kind of sector`);
+          if (m.home) out.fails.push(`sector ${m.key}: landmark in the home sector`);
+        }
+        if (m.graveyard) {
+          out.e6.gy++;
+          near('gy');
+          if (cheb < 2 || !m.exists || m.landmark) out.fails.push(`sector ${m.key}: graveyard where none may be`);
+        }
+      }
+  const e6metas = ['snr', 'pn', 'ring', 'gy'].filter((k) => nearest[k]).map((k) => nearest[k][1]); // a second batch (below)
+  // a fresh worker per batch, posted exactly what the game posts (Phase 6C: + the star system, 6E: + its settings)
+  const workerGen = async (list) => {
     const w = new Worker(URL.createObjectURL(new Blob([workerSource()], { type: 'text/javascript' })));
-    workerOuts = await new Promise((res, rej) => {
+    const r = await new Promise((res, rej) => {
       const got = new Map();
       const t = setTimeout(() => rej(new Error('worker timeout')), 120000);
       w.onmessage = (e) => {
@@ -241,24 +281,38 @@ const SECTOR_CHECK = async () => {
           return;
         }
         got.set(d.id, d.out);
-        if (got.size === metas.length) {
+        if (got.size === list.length) {
           clearTimeout(t);
-          res(metas.map((m) => got.get(m.key)));
+          res(list.map((m) => got.get(m.key)));
         }
       };
       w.onerror = (e) => {
         clearTimeout(t);
         rej(new Error(e.message || 'worker error'));
       };
-      for (const m of metas) w.postMessage({ id: m.key, meta: sectorMsg(m), ao: CFG.BAKE_AO }); // exactly what the game posts (Phase 6C: + the star system)
-      if (!metas.length) res([]);
+      for (const m of list) w.postMessage({ id: m.key, meta: sectorMsg(m), ao: CFG.BAKE_AO });
+      if (!list.length) res([]);
     });
     w.terminate();
+    return r;
+  };
+  const nA = metas.length;
+  let mains = metas.map((m) => genMain(m));
+  let workerOuts = null;
+  try {
+    workerOuts = await workerGen(metas);
   } catch (e) {
     out.workerError = String(e.message || e);
   }
   if (workerOuts) metas.forEach((m, i) => exact(mains[i]) !== exact(workerOuts[i]) && out.mismatch.push(m.key));
-  out.sector = rounded(mains.slice(0, nN)); // the digest covers the neighbour sectors only (as before)
+  // the digest covers the neighbour sectors only (as before); Phase 6E fields are left out while they are empty
+  const strip6E = (o) => {
+    const c = Object.assign({}, o);
+    if (c.comets && !c.comets.length) delete c.comets;
+    for (const k of ['belt', 'graveyard', 'aring', 'landmark']) if (c[k] == null) delete c[k];
+    return c;
+  };
+  out.sector = rounded(mains.slice(0, nN).map(strip6E));
   // sanity checks per sector
   const bad = (v) => {
     if (typeof v === 'number') return !Number.isFinite(v);
@@ -272,9 +326,8 @@ const SECTOR_CHECK = async () => {
   };
   const KNOWN = new Set([0, 1, 2, 3, 4, ...PT_NEW]),
     KMOON = new Set([5, ...PT_MOONS]);
-  metas.forEach((m, i) => {
-    const o = mains[i],
-      C = m.star,
+  const check = (m, i, o) => {
+    const C = m.star,
       SR = m.r,
       tag = `sector ${m.key}`;
     if (bad(o)) out.fails.push(`${tag}: NaN/Infinity in generated data`);
@@ -284,7 +337,7 @@ const SECTOR_CHECK = async () => {
       if (!KNOWN.has(p.type)) out.fails.push(`${tag}: ${p.name} has unknown type ${p.type}`);
       if (p.type >= 8 && !(p.pp && p.pp.length === PP_N)) out.fails.push(`${tag}: ${p.name} has no parameter set`);
       if (p.ring && !(p.ring.in > p.r && p.ring.out > p.ring.in)) out.fails.push(`${tag}: ${p.name} ring inside the planet`);
-      if (i < nN) out.types.push(p.type, ...(p.ring ? ['ring'] : []));
+      if (i < nN && !p.edge) out.types.push(p.type, ...(p.ring ? ['ring'] : [])); // Phase 6E: edge dwarfs are counted apart
       for (const mo of p.moons) {
         const mt = mo.type || 5;
         if (!KMOON.has(mt)) out.fails.push(`${tag}: moon ${mo.name} has unknown type ${mt}`);
@@ -295,14 +348,25 @@ const SECTOR_CHECK = async () => {
       }
     }
     if (plumes > CFG.PLUME_MOONS_MAX) out.fails.push(`${tag}: ${plumes} plume moons (cap ${CFG.PLUME_MOONS_MAX})`);
+    if (m.landmark && m.landmark.kind !== 'ring') {
+      // Phase 6E: a remnant / nebula sector holds its central star and the shell, nothing else
+      const L = o.landmark;
+      if (!L || L.kind !== m.landmark.kind || o.planets.length || o.wrecks.length || o.comets.length || o.belt || o.graveyard || o.aring)
+        out.fails.push(`${tag}: a ${m.landmark.kind} sector must hold the landmark and nothing else`);
+      if (L && !(L.R > 1000 && L.R < 20000)) out.fails.push(`${tag}: landmark radius ${L.R}`);
+      out.e6.gen.push(m.landmark.kind);
+      return;
+    }
     if (m.rogue) {
       if (o.planets.length !== 1 || o.planets[0].type !== 15 || o.wrecks.length || o.beacon || o.med)
         out.fails.push(`${tag}: a rogue sector must hold exactly one rogue planet and nothing else`);
       if (o.planets.some((p) => p.moons.length > 1)) out.fails.push(`${tag}: rogue planet with more than one moon`);
       return; // no star to check against
     }
-    if (o.planets.length > 5) out.fails.push(`${tag}: ${o.planets.length} planets (cap 5)`);
-    if (o.wrecks.length > 2) out.fails.push(`${tag}: ${o.wrecks.length} wrecks (cap 2)`);
+    const np = o.planets.filter((p) => !p.edge).length; // Phase 6E: edge dwarfs have a cap of their own (below)
+    if (np > 5) out.fails.push(`${tag}: ${np} planets (cap 5)`);
+    const gyw = o.wrecks.filter((w) => w.gy);
+    if (o.wrecks.length - gyw.length > 2) out.fails.push(`${tag}: ${o.wrecks.length - gyw.length} wrecks (cap 2)`);
     const P = o.planets;
     for (const p of P) if (p.moons.length > 2) out.fails.push(`${tag}: ${p.name} has ${p.moons.length} moons (cap 2)`);
     for (let a = 0; a < P.length; a++)
@@ -382,7 +446,101 @@ const SECTOR_CHECK = async () => {
       inStar('medusa swarm', o.med.c, 150);
       inPlanet('medusa swarm', o.med.c, 150);
     }
-  });
+    // Phase 6E: comets, outer belt and edge dwarfs, graveyard, ancient ring
+    const core = P.filter((p) => !p.edge);
+    const reachOf = (p) => p.r * 1.05 + p.moons.reduce((a, mo) => Math.max(a, mo.dist + mo.r), 0);
+    if (o.comets.length > CFG.COMETS_MAX) out.fails.push(`${tag}: ${o.comets.length} comets (cap ${CFG.COMETS_MAX})`);
+    // the ancient ring's band (ring-local: radius Rr - Hw .. Rr + Th, |y| < W / 2, angle a0 .. a1): distance from a point
+    const bandDist = (A, pt) => {
+      const lp = qrot(qconj(A.q), sub(pt, A.C));
+      let phi = Math.atan2(lp[2], lp[0]);
+      while (phi < A.a0) phi += TAU;
+      while (phi > A.a0 + TAU) phi -= TAU;
+      if (phi > A.a1) phi = phi - A.a1 < A.a0 + TAU - phi ? A.a1 : A.a0;
+      const rho = clamp(Math.hypot(lp[0], lp[2]), A.Rr - A.Hw, A.Rr + A.Th);
+      return len(sub(lp, [Math.cos(phi) * rho, clamp(lp[1], -A.W / 2, A.W / 2), Math.sin(phi) * rho]));
+    };
+    for (const c of o.comets) {
+      if (!(c.e > 0 && c.e < 1 && c.a > 0)) out.fails.push(`${tag}: comet ${c.name} orbit e=${c.e} a=${c.a}`);
+      const hit = new Set();
+      let a = cometPos(c, 0);
+      for (let i = 1; i <= 512; i++) {
+        const b = cometPos(c, (i / 512) * c.P),
+          ab = sub(b, a),
+          l2 = Math.max(dot(ab, ab), 1e-6);
+        const dseg = (pt) => len(sub(pt, add(a, scl(ab, clamp(dot(sub(pt, a), ab) / l2, 0, 1)))));
+        for (const p of P) if (dseg(p.pos) < reachOf(p) + c.r) hit.add(`passes through ${p.name} or its moons`);
+        for (const st of stars) if (dseg(st.pos) < st.r * 1.05 + c.r) hit.add(`passes through the star ${st.name}`);
+        if (pairReach && dseg(C) < pairReach * 1.05 + c.r) hit.add('crosses the orbit of the star pair');
+        if (o.aring && bandDist(o.aring, b) < c.r + 50) hit.add('ring');
+        a = b;
+      }
+      for (const h of hit)
+        (h === 'ring' ? out.warns : out.fails).push(`${tag}: comet ${c.name} ${h === 'ring' ? 'path crosses the ancient ring' : h}`);
+    }
+    if (i < nN) out.e6.comets += o.comets.length;
+    const edge = P.filter((p) => p.edge);
+    if (edge.length > CFG.EDGE_DWARFS_MAX) out.fails.push(`${tag}: ${edge.length} edge dwarfs (cap ${CFG.EDGE_DWARFS_MAX})`);
+    if (i < nN) out.e6.dwarfs += edge.length;
+    if (edge.length && !o.belt) out.fails.push(`${tag}: edge dwarf without an outer belt`);
+    if (o.belt) {
+      const B = o.belt,
+        n = B.inst.reduce((a, x) => a + x.length / INSTA, 0);
+      if (i < nN) out.e6.belts++;
+      for (const st of stars)
+        if (Math.abs(len(sub(st.pos, B.C)) - (B.R0 + B.R1) / 2) < (B.R1 - B.R0) / 2 + st.r * 1.05)
+          out.fails.push(`${tag}: the star ${st.name} sits in the outer belt`);
+      if (n > CFG.OUTER_BELT_ROCKS) out.fails.push(`${tag}: ${n} outer-belt rocks (cap ${CFG.OUTER_BELT_ROCKS})`);
+      for (const p of core) if (len(sub(p.pos, B.C)) + reachOf(p) > B.R0) out.fails.push(`${tag}: ${p.name} reaches into the outer belt`);
+      for (const p of edge) {
+        const rad = len(sub(p.pos, B.C));
+        if (rad < B.R0 || rad > B.R1) out.fails.push(`${tag}: edge dwarf ${p.name} outside its belt`);
+      }
+    }
+    if (gyw.length) {
+      const big = gyw.filter((w) => w.big);
+      if (big.length > CFG.GRAVEYARD_ENTER || gyw.length - big.length > CFG.GRAVEYARD_WRECKS)
+        out.fails.push(
+          `${tag}: graveyard ${gyw.length - big.length} + ${big.length} hulls (caps ${CFG.GRAVEYARD_WRECKS} + ${CFG.GRAVEYARD_ENTER})`,
+        );
+      for (const w of big) if (!(w.breach && w.interior)) out.fails.push(`${tag}: enterable hull ${w.name} without breach / interior`);
+      const W = o.wrecks;
+      for (let a = 0; a < W.length; a++)
+        for (let b = a + 1; b < W.length; b++)
+          if (len(sub(W[a].pos, W[b].pos)) < W[a].rad + W[b].rad) out.fails.push(`${tag}: wrecks ${W[a].name} / ${W[b].name} overlap`);
+      if (!o.graveyard) out.fails.push(`${tag}: graveyard hulls without a graveyard`);
+      else {
+        inStar('graveyard', o.graveyard.c, o.graveyard.R);
+        inPlanet('graveyard', o.graveyard.c, o.graveyard.R);
+      }
+      out.e6.gen.push('gy');
+    }
+    if (o.aring) {
+      const A = o.aring;
+      for (const p of P) if (bandDist(A, p.pos) < reachOf(p) + 300) out.fails.push(`${tag}: ${p.name} reaches the ancient ring`);
+      if (o.belt && o.belt.R1 > A.Rr - A.Hw - 300) out.fails.push(`${tag}: the outer belt reaches the ancient ring`);
+      for (const st of stars)
+        if (bandDist(A, st.pos) < st.r * 1.05 + 500) out.fails.push(`${tag}: the ancient ring passes by the star ${st.name}`);
+      for (const w of o.wrecks) if (bandDist(A, w.pos) < w.rad + 50) out.fails.push(`${tag}: wreck ${w.name} inside the ancient ring`);
+      if (!(A.a1 > A.a0 && A.a1 - A.a0 < Math.PI)) out.fails.push(`${tag}: ancient ring arc ${A.a0}..${A.a1}`);
+      if (A.ruins.length > 37 || A.ruins.filter((r) => r.mono).length !== 1) out.fails.push(`${tag}: ancient ring ruins ${A.ruins.length}`);
+      out.e6.gen.push('ring');
+    }
+  };
+  metas.forEach((m, i) => check(m, i, mains[i]));
+  // Phase 6E: the nearest remnant / nebula / ring / graveyard sectors, as a second batch once the first is released (a
+  // graveyard is heavy: generating every sector twice at once pushed the software-rendered page past 4 GB)
+  mains = workerOuts = null;
+  const mE = e6metas.map((m) => genMain(m));
+  let wE = null;
+  if (!out.workerError)
+    try {
+      wE = await workerGen(e6metas);
+    } catch (e) {
+      out.workerError = String(e.message || e);
+    }
+  if (wE) e6metas.forEach((m, k) => exact(mE[k]) !== exact(wE[k]) && out.mismatch.push(m.key));
+  e6metas.forEach((m, k) => check(m, nA + k, mE[k]));
   return out;
 };
 
@@ -504,7 +662,7 @@ async function runSeed(seed) {
     } catch (e) {}
   });
   try {
-    await page.goto(`${pathToFileURL(file).href}#seed=${seed}&q=${quality}`);
+    await page.goto(`${pathToFileURL(file).href}${cfgOv ? `?cfg=${encodeURIComponent(cfgOv)}` : ''}#seed=${seed}&q=${quality}`);
     await page.waitForFunction(() => window.__vbReady === true, null, { timeout });
     r.loadMs = await page.evaluate(() => window.__vbLoadMs);
     await page.evaluate(() => {
@@ -626,6 +784,21 @@ if (swarn.length)
     const pct = (k) => `${k} ${c[k] || 0} (${(((c[k] || 0) / np) * 100).toFixed(1)}%)`;
     console.log(
       `planet types (${np} planets): ${[0, 1, 2, 3, 4, ...PT_NEW_LIST].map(pct).join(' · ')} | moons: ${['m5', 'm16', 'm17', 'm18'].map((k) => `${k} ${c[k] || 0}`).join(' · ')} | rings ${c.ring || 0} | rogue planets within 6 sectors: ${results.map((r) => (r.sect ? r.sect.rogues : '-')).join(' ')}`,
+    );
+  }
+}
+// Phase 6E: landmarks and graveyards in the scanned 13 x 3 x 13 sectors (507 per seed), with N-class stars for scale
+{
+  const S = results.filter((r) => r.sect).map((r) => r.sect.e6);
+  if (S.length) {
+    const sum = (k) => S.reduce((a, e) => a + e[k], 0);
+    const gen = S.flatMap((e) => e.gen).reduce((o, k) => ((o[k] = (o[k] || 0) + 1), o), {});
+    console.log(
+      `deep space (${S.length} seeds x 507 sectors): remnants ${sum('snr')} · nebulae ${sum('pn')} · ancient rings ${sum('ring')} · graveyards ${sum('gy')} · N-class stars ${sum('nstar')} | neighbour sectors: comets ${sum('comets')} · outer belts ${sum('belts')} · edge dwarfs ${sum('dwarfs')} | generated and checked: ${
+        Object.entries(gen)
+          .map(([k, v]) => `${k} ${v}`)
+          .join(' · ') || '-'
+      }`,
     );
   }
 }

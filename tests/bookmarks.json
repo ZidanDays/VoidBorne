@@ -1,5 +1,5 @@
 {
-  "about": "Camera bookmarks for tests/shots.mjs. Each one loads dist/voidborne.debug.html?det=1&manual=1#seed=<seed>&q=<quality>, freezes the frame loop, optionally sets the clock ('time', s), places the camera with __VB.place(place) (see src/debug/vb-api.js), runs 1 frame, waits for streaming, runs frames-2 more frames and captures the canvas. 'dir' is the direction from the subject to the camera (\"sun\" = its lit side); 'dist' is in radii of the subject unless the place says metres. Phase 6B: '-ultra' bookmarks repeat a '-high' (or '-medium') view with the ultra preset for side-by-side comparison; hull-close and planet-close come in a high/ultra pair. Phase 6C: star-class and multiple-star views ('starclass' / 'sysplanet' places, see src/debug/vb-api.js); a bookmark's own 'cfg' is added to the URL as ?cfg= (home-variety turns on CFG.HOME_STAR_VARIETY).",
+  "about": "Camera bookmarks for tests/shots.mjs. Each one loads dist/voidborne.debug.html?det=1&manual=1#seed=<seed>&q=<quality>, freezes the frame loop, optionally sets the clock ('time', s), places the camera with __VB.place(place) (see src/debug/vb-api.js), runs 1 frame, waits for streaming, runs frames-2 more frames and captures the canvas. 'dir' is the direction from the subject to the camera (\"sun\" = its lit side); 'dist' is in radii of the subject unless the place says metres. Phase 6B: '-ultra' bookmarks repeat a '-high' (or '-medium') view with the ultra preset for side-by-side comparison; hull-close and planet-close come in a high/ultra pair. Phase 6C: star-class and multiple-star views ('starclass' / 'sysplanet' places, see src/debug/vb-api.js); a bookmark's own 'cfg' is added to the URL as ?cfg= (home-variety turns on CFG.HOME_STAR_VARIETY). Phase 6E: 'e6-' bookmarks show the new deep-space content of seed 1337 (nearest comet, outer belt, ship graveyard and an enterable hull, the broken ancient ring and its monolith, a supernova remnant from outside, inside and at low quality, a planetary nebula); place {at:'e6', what} finds the nearest one.",
   "size": [640, 360],
   "frames": 6,
   "tolerance": {
@@ -665,6 +665,101 @@
         "ring": 1,
         "dist": 3.2,
         "dir": [0.3, 0.45, 0.84]
+      }
+    },
+    {
+      "name": "e6-comet-1337",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "e6",
+        "what": "comet"
+      }
+    },
+    {
+      "name": "e6-outer-belt-1337",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "e6",
+        "what": "belt"
+      }
+    },
+    {
+      "name": "e6-graveyard-1337",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "e6",
+        "what": "graveyard"
+      }
+    },
+    {
+      "name": "e6-graveyard-hull-1337",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "e6",
+        "what": "ghull"
+      }
+    },
+    {
+      "name": "e6-ring-1337",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "e6",
+        "what": "ring"
+      }
+    },
+    {
+      "name": "e6-ring-monolith-1337",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "e6",
+        "what": "mono"
+      }
+    },
+    {
+      "name": "e6-remnant-1337",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "e6",
+        "what": "snr",
+        "range": 14
+      }
+    },
+    {
+      "name": "e6-remnant-inside-1337",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "e6",
+        "what": "snr",
+        "inside": true,
+        "range": 14
+      }
+    },
+    {
+      "name": "e6-nebula-1337",
+      "seed": 1337,
+      "quality": "high",
+      "place": {
+        "at": "e6",
+        "what": "pn",
+        "range": 14
+      }
+    },
+    {
+      "name": "e6-remnant-low-1337",
+      "seed": 1337,
+      "quality": "low",
+      "place": {
+        "at": "e6",
+        "what": "snr",
+        "range": 14
       }
     }
   ]

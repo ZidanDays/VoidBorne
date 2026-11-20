@@ -164,7 +164,8 @@ function logCheck(dt) {
   }
   for (const s of readySectors())
     for (const w of s.wrecks)
-      if (!w.logRead && near(w, w.ship.rad * 0.6 + 40)) {
+      if (!w.logRead && (w.big ? player.insideW === w : near(w, w.ship.rad * 0.6 + 40))) {
+        // Phase 6E: an enterable graveyard hull gives up its log only from inside
         w.logRead = true;
         showLog(w.log, 'log:' + w.id, w.name, w.pos);
       }

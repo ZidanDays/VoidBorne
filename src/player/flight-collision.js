@@ -91,6 +91,8 @@ function sphereHit(c, r) {
 }
 function collide() {
   sphereHit(STAR.pos, STAR.r + 6);
+  player.inside = false;
+  player.insideW = null; // Phase 6E: set by sectorCollide inside an enterable graveyard hull
   sectorCollide();
   for (const p of planets) {
     sphereHit(p.pos, p.r * 1.03);
@@ -112,8 +114,7 @@ function collide() {
       for (const it of beltItems) asteroidHits(it, M, [0, 0, 0]);
     }
   }
-  // wrecks
-  player.inside = false;
+  // wrecks (player.inside is reset before sectorCollide, Phase 6E)
   for (const w of wrecks) {
     const rel = sub(player.pos, w.pos);
     if (len(rel) > w.rad + 10) continue;
@@ -154,7 +155,7 @@ function collide() {
       if (l < rr2 && l > 1e-6) bounce(qrot(w.q, scl(d, 1 / l)), rr2 - l);
     }
   }
-  if (player.inside && wrecks[0].big) interiorCollide(); // Phase 5A: bulkheads, doors, furniture, crates
+  if (player.inside && !player.insideW && wrecks[0].big) interiorCollide(); // Phase 5A: bulkheads, doors, furniture, crates
   // station
   {
     const rel = sub(player.pos, station.pos);

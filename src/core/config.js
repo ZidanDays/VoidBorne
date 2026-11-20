@@ -195,5 +195,26 @@ const CFG = {
   ROGUE_STARLIGHT: 0.05, // light a rogue planet gets from the nearest star, relative to that star's own light
   PLANET_VOICE: true, // a quiet synthesized signature near the new planet types, rogue planets and plume moons (spatialized, captioned)
   PLANET_VOICE_RANGE: 4000, // m from the surface within which a planet's voice plays
+  // ---- added in Phase 6E (small bodies and deep-space landmarks); none of it is placed in the home system ----
+  COMETS: true, // comets on eccentric orbits in generated systems: irregular nucleus (solid), ion + dust tails (particles, not solid)
+  COMET_CHANCE: 0.35, // chance that a system has a comet (a second one: a quarter of that)
+  COMETS_MAX: 2, // per-sector cap
+  COMET_PARTICLES: { low: 120, medium: 260, high: 420, ultra: 640 }, // tail particles per comet (ion + dust), one draw each
+  COMET_RANGE: 40000, // m: tails further away are not drawn
+  OUTER_BELT: true, // a sparse Kuiper-like belt of rocks beyond the last planet (the instanced rock machinery of the home belt)
+  OUTER_BELT_CHANCE: 0.45, // chance per system
+  OUTER_BELT_ROCKS: 1500, // rocks per belt (cap; 3 instanced draws)
+  EDGE_DWARFS_MAX: 2, // dwarf planets inside an outer belt (cap per sector)
+  GRAVEYARD: true, // a rare field of derelicts in the outskirts of a system, one or two of them enterable
+  GRAVEYARD_CHANCE: 0.012, // chance per system, never within one sector of home (for scale: about 1 % of systems have a neutron star)
+  GRAVEYARD_WRECKS: 10, // derelicts per graveyard (cap; plus GRAVEYARD_ENTER enterable hulls)
+  GRAVEYARD_ENTER: 2, // enterable hulls per graveyard (1..2)
+  RARE_LANDMARK: 0.35, // the global rare-landmark probability: chance that a block of LANDMARK_BLOCK^3 sectors holds one landmark
+  LANDMARK_BLOCK: 4, // at most one landmark per block of 4 x 4 x 4 sectors (in a sector chosen by a hash of the block)
+  LANDMARK_MIN_DIST: 3, // sectors (Chebyshev) from home: landmarks are always far from the start
+  SNR: true, // supernova remnant: an expanding shell of glowing filaments around a neutron star, in an empty sector
+  PLANETARY_NEBULA: true, // planetary nebula: a two-lobed glowing shell around a white dwarf, in an empty sector
+  ANCIENT_RING: true, // megastructure: a broken segment of an ancient ring with ruins, around a system's star
+  LANDMARK_VOICE: true, // synthesized signatures of comets, outer belts, graveyards, remnants, nebulae and the ring (captioned)
 };
 /* ===================================================================== */

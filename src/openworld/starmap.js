@@ -35,6 +35,7 @@ function mapInfo() {
       ' · ' +
       (m.rogue ? esc(tl('map.rogue')) + ' · ' : '') + // Phase 6D: a rogue planet's sector
       (m.cls ? esc(tl('cls.star' + m.cls)) + (m.sys && m.sys.kind !== 'single' ? ' · ' + esc(tl('map.' + m.sys.kind)) : '') + ' · ' : '') + // Phase 6C
+      mapLandmark(m) + // Phase 6E
       (d / 1000).toFixed(1) +
       ' km · ' +
       esc(tl('map.sector')) +
@@ -74,6 +75,14 @@ function mapInfo() {
       toggleAutopilot();
     };
   $('#mclose').onclick = () => toggleMap(false);
+}
+// Phase 6E: a remnant or nebula is named on sight; the ancient ring and a graveyard only once their sector was visited
+function mapLandmark(m) {
+  const seen = PROG.visited.indexOf(m.key) >= 0;
+  let h = '';
+  if (m.landmark && (m.landmark.kind !== 'ring' || seen)) h += esc(tl('map.' + m.landmark.kind)) + ' · ';
+  if (m.graveyard && seen) h += esc(tl('map.graveyard')) + ' · ';
+  return h;
 }
 function drawMap() {
   const dpr = Math.min(devicePixelRatio || 1, 2);
@@ -126,6 +135,30 @@ function drawMap() {
           c.stroke();
           c.fillStyle = 'rgba(170,190,230,0.7)';
           c.fillText('?', x + 5, y - 4);
+          MAP.hits.push({ x, y, m });
+          continue;
+        }
+        if (!m.exists && m.landmark) {
+          // Phase 6E: a supernova remnant or planetary nebula: a soft disc at its true size (at least a few pixels), a dot
+          const [x, y] = toS(m.star);
+          const snr = m.landmark.kind === 'snr';
+          c.globalAlpha = dy === 0 ? 1 : 0.35;
+          c.fillStyle = snr ? 'rgba(255,120,110,0.22)' : 'rgba(110,230,220,0.22)';
+          c.beginPath();
+          c.arc(x, y, Math.max(5, m.landmark.R * sc), 0, TAU);
+          c.fill();
+          c.strokeStyle = snr ? 'rgba(255,150,130,0.7)' : 'rgba(140,240,230,0.7)';
+          c.stroke();
+          c.fillStyle = '#e8f4ff';
+          c.beginPath();
+          c.arc(x, y, 1.5, 0, TAU);
+          c.fill();
+          if (PROG.visited.indexOf(m.key) >= 0 || SECT.loaded.has(m.key)) {
+            c.strokeStyle = SECT.loaded.has(m.key) ? 'rgba(150,255,190,0.8)' : 'rgba(150,200,255,0.5)';
+            c.beginPath();
+            c.arc(x, y, Math.max(5, m.landmark.R * sc) + 3, 0, TAU);
+            c.stroke();
+          }
           MAP.hits.push({ x, y, m });
           continue;
         }

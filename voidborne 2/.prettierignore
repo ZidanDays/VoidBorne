@@ -1,0 +1,9 @@
+# Prettier formats the JavaScript/JSON sources only (npm run format = node tools/format-proof.mjs).
+node_modules/
+dist/
+tests/out/
+tests/current/
+tests/baseline/
+# HTML shells and docs are kept as written (whitespace inside HTML can be meaningful)
+*.html
+*.md

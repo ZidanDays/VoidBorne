@@ -23,6 +23,7 @@
      place({ at: 'starclass', cls: 'M', kind: 'close' })   (Phase 6C) the nearest generated system of that star class / kind
      place({ at: 'sysplanet', kind: 'close', index: 0 })    (Phase 6C) a planet of such a system, terminator side
      place({ at: 'ptype', type: 8 }) / place({ at: 'ptype', moon: 16 })    (Phase 6D) nearest planet / moon of a new type
+     place({ at: 'e6', what: 'comet' })   (Phase 6E) comet | belt | graveyard | ghull | ring | mono | snr | pn (inside: true)
      glErrors()           drain and name every pending WebGL error (empty array = none)
      start()              leave the start screen without the intro, audio or pointer lock
      digest()             short hash of the home world (numbers rounded), to confirm which world a run used
@@ -229,6 +230,48 @@ function vbPlace(s = {}) {
       VB_LAST.body = { sector: f.m.key, name: (f.moon || f.p).name, type: (f.moon || f.p).type };
       break;
     }
+    case 'e6': {
+      // Phase 6E: s.what = comet | belt | graveyard | ghull (inside an enterable hull) | ring | mono | snr | pn; nearest first
+      const f = vbFindE6(s);
+      const m = f.m,
+        o = f.out,
+        d = s.dist;
+      VB_LAST.body = { sector: m.key, what: s.what };
+      if (s.what === 'comet') {
+        const c = o.comets[0],
+          cp = cometPos(c, time),
+          ad = norm(sub(cp, m.star));
+        const side = norm(cross(ad, [0, 1, 0]));
+        vbLook(add(cp, add(scl(side, d || 2200), scl(ad, 600))), add(cp, scl(ad, 700)));
+        VB_LAST.body.name = c.name;
+      } else if (s.what === 'belt') {
+        const B = o.belt,
+          rm = (B.R0 + B.R1) / 2;
+        const p = add(B.C, qrot(B.q, [rm, 40, 0])),
+          look = add(B.C, qrot(B.q, [rm * Math.cos(0.08), 0, rm * Math.sin(0.08)]));
+        vbLook(p, look);
+      } else if (s.what === 'graveyard') {
+        const G = o.graveyard;
+        vbLook(add(G.c, scl(norm([0.6, 0.35, 0.7]), G.R * (d || 1.7))), G.c);
+      } else if (s.what === 'ghull') {
+        const w = o.wrecks.find((x) => x.big);
+        const q = qaxis(w.axis, time * w.rate + w.ph);
+        vbLook(add(w.pos, qrot(q, [-w.L * 0.3, -w.R * 0.5 + 4, 0])), add(w.pos, qrot(q, [w.L * 0.2, -w.R * 0.3, 0])));
+        VB_LAST.body.name = w.name;
+      } else if (s.what === 'ring' || s.what === 'mono') {
+        const A = o.aring,
+          mid = (A.a0 + A.a1) / 2;
+        const at = (phi, rad, y) => add(A.C, qrot(A.q, [Math.cos(phi) * rad, y, Math.sin(phi) * rad]));
+        if (s.what === 'mono') vbLook(add(A.monoPos, scl(norm(sub(A.C, A.monoPos)), 45)), A.monoPos);
+        else vbLook(at(A.a0 - 0.05, A.Rr - (d || 900), A.W * 1.2), at(mid, A.Rr, 0));
+      } else {
+        const L = m.landmark,
+          dir = norm([0.5, 0.3, 0.8]);
+        if (s.inside) vbLook(add(m.star, scl(dir, L.R * 0.55)), add(m.star, scl(dir, L.R * 2)));
+        else vbLook(add(m.star, scl(dir, L.R * (d || 2.4))), m.star);
+      }
+      break;
+    }
     case 'pos':
       vbLook(s.pos, s.look || add(s.pos, [0, 0, -1]));
       break;
@@ -238,6 +281,45 @@ function vbPlace(s = {}) {
   return { pos: player.pos.slice(), q: player.q.slice() };
 }
 // Phase 6C: nearest generated system matching { cls, kind } within s.range sectors (default 6), by sector distance
+// Phase 6E: nearest sector holding s.what (generated in full, then thrown away; the streamer generates it again when it loads)
+function vbFindE6(s) {
+  const R = s.range || 10,
+    cand = [];
+  for (let x = -R; x <= R; x++)
+    for (let y = -1; y <= 1; y++)
+      for (let z = -R; z <= R; z++) {
+        const mm = sectorMeta(x, y, z);
+        if (mm.home) continue;
+        const w = s.what;
+        if (
+          w === 'snr' || w === 'pn'
+            ? mm.landmark && mm.landmark.kind === w
+            : w === 'ring' || w === 'mono'
+              ? mm.landmark && mm.landmark.kind === 'ring'
+              : w === 'graveyard' || w === 'ghull'
+                ? mm.graveyard
+                : mm.exists
+        )
+          cand.push([x * x + y * y + z * z, mm]);
+      }
+  cand.sort((a, b) => a[0] - b[0]);
+  let skip = s.nth || 0;
+  for (const [, mm] of cand) {
+    const o = withSeed(mm.seed, () => genSector(sectorMsg(mm), false));
+    const ok =
+      s.what === 'comet'
+        ? o.comets.length > 0
+        : s.what === 'belt'
+          ? !!o.belt
+          : s.what === 'ring' || s.what === 'mono'
+            ? !!o.aring
+            : s.what === 'graveyard' || s.what === 'ghull'
+              ? !!o.graveyard
+              : true;
+    if (ok && skip-- <= 0) return { m: mm, out: o };
+  }
+  throw new Error('no ' + s.what + ' within ' + R + ' sectors');
+}
 // Phase 6D: nearest sector (by grid distance) holding a planet of type s.type, a moon of type s.moon, or (s.ring) a ringed
 // planet of a type that never had rings; s.nth skips that many matches
 const VB_LAST = {};

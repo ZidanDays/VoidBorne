@@ -232,6 +232,19 @@ function setCam(pr, b, tanX, tanY) {
 // LOD by apparent size; the dense mesh (sphUltra) only for the nearest planet when it fills the view; displacement only on the two dense levels.
 // Phase 6B 'ultra' (PLOD = 1): any planet, moon or star steps up earlier, and an ico-7 sphere is used when it fills the view.
 let PLOD = 0;
+// Phase 6E: one shared buffer of comet-tail particles (seeds from a fixed hash)
+const TAIL_N = 384;
+let TAIL_PTS = null;
+function tailPoints() {
+  if (TAIL_PTS) return TAIL_PTS;
+  const a = new Float32Array(TAIL_N * 10);
+  const g = mkRng(0x7a11c0de);
+  for (let i = 0; i < TAIL_N; i++) a.set([0, 0, 0, g(), g(), g(), g(), 1, 1, 1], i * 10);
+  TAIL_PTS = { a, n: TAIL_N, dynamic: false, vao: null, vbo: null };
+  uploadPoints(TAIL_PTS);
+  GLR.points.push(TAIL_PTS);
+  return TAIL_PTS;
+}
 // Phase 6D: one shared buffer of plume particles (seeds from a fixed hash, never the world RNG)
 const PLUME_N = 256;
 let PLUME_PTS = null;
@@ -362,7 +375,48 @@ function m4translate(m, t) {
 }
 const ONE3 = [1, 1, 1];
 const volData = new Float32Array(12),
-  volCol = new Float32Array(12);
+  volCol = new Float32Array(12),
+  volK = new Float32Array(12), // Phase 6E shells: kind, inner radius, brightness, seed
+  volA = new Float32Array(12); // lobe axis
+// Phase 6E: the SHELL build of the volumetric pass, linked on first need (a landmark in view); null until it is ready
+let VOLSH = null;
+function volShellProg() {
+  if (!VOLSH) {
+    try {
+      VOLSH = ultraLinkStart(FS_VS, VOL_FS.replace('#version 300 es\n', '#version 300 es\n#define SHELL 1\n'), 'volumetrics-shell');
+    } catch (e) {
+      VOLSH = { failed: true };
+    }
+  }
+  if (VOLSH.failed) return null;
+  if (VOLSH._p)
+    try {
+      if (!ultraLinkDone(VOLSH)) return null;
+    } catch (e) {
+      console.warn('VOIDBORNE: ' + e.message);
+      VOLSH = { failed: true };
+      return null;
+    }
+  return VOLSH;
+}
+// Phase 6E: remnants and nebulae within reach of the eye (sector metas of the 5 x 3 x 5 sectors around it), nearest first
+function landmarkShells(eye) {
+  const out = [];
+  const cs = sectorOf(eye);
+  for (let dx = -2; dx <= 2; dx++)
+    for (let dy = -1; dy <= 1; dy++)
+      for (let dz = -2; dz <= 2; dz++) {
+        const m = sectorMeta(cs[0] + dx, cs[1] + dy, cs[2] + dz);
+        const L = m.landmark;
+        if (!L || L.kind === 'ring') continue;
+        const d = len(sub(m.star, eye));
+        if (d > L.R + 90000) continue;
+        const snr = L.kind === 'snr';
+        const Rt = L.R * (snr ? (1 + time * 2e-6) * (0.9 + L.age * 0.2) : 1); // a remnant keeps expanding, slowly
+        out.push({ c: m.star, R: Rt, kind: snr ? 1 : 2, inner: snr ? 0.8 : 0.5, gain: snr ? 3 : 2.2, seed: (L.seed % 1000) / 37, axis: L.axis, d }); // prettier-ignore
+      }
+  return out.sort((a, b) => a.d - b.d);
+}
 function drawRing(VP, p, star, l2) {
   gl.useProgram(prRing.p);
   gl.uniformMatrix4fv(prRing.u.uVP, false, VP);
@@ -571,8 +625,9 @@ function render(rt) {
     drawPlanetBody(pr, p, o.pos, o.r, o.q, t, o.pal, o.seed, ultraOK, pp);
   };
   // Phase 6C: lit by the system's primary (st) and, when it has one, a second star (l2); every star of it is drawn
-  const drawSystem = (list, st, l2, stars) => {
+  const drawSystem = (list, st, l2, stars, comets) => {
     bindP(pPlanet, st, l2);
+    if (comets) for (const c of comets) if (c.pos && vis(c.pos, c.r * 2)) body(c, PT_COMET, st, l2, false, null); // Phase 6E nuclei
     for (const p of list) {
       if (vis(p.pos, p.r * 1.1)) {
         visP.push([p, st, l2]);
@@ -598,7 +653,7 @@ function render(rt) {
         );
   };
   drawSystem(planets, HS, null, [HS]);
-  for (const s of secs) drawSystem(s.planets, s.star, s.l2, s.stars);
+  for (const s of secs) drawSystem(s.planets, s.star, s.l2, s.stars, s.comets);
   RST.planets = visP.length;
   // opaque meshes (home system)
   const pMesh = (U && ULTRA.pr.mesh) || prMesh;
@@ -622,6 +677,8 @@ function render(rt) {
     meshCommon(pMesh, s.star, s.l2);
     for (const wr of s.wrecks) if (vis(wr.pos, wr.rad * 2.5)) for (const it of wr.items) drawItem(pMesh, it);
     if (s.beacon && s.beacon.items && vis(s.beacon.pos, 20)) for (const it of s.beacon.items) drawItem(pMesh, it);
+    if (s.graveyard && vis(s.graveyard.c, s.graveyard.R * 1.5)) for (const it of s.graveyard.items) drawItem(pMesh, it); // Phase 6E
+    if (s.aring && vis(s.aring.C, s.aring.Rr + s.aring.W)) for (const it of s.aring.items) drawItem(pMesh, it);
   }
   // asteroids (GPU orbits; uCenter is camera-relative)
   gl.useProgram(prAst.p);
@@ -649,6 +706,19 @@ function render(rt) {
     gl.uniformMatrix3fv(prAst.u.uPlane, false, q2m3(ringedP.ring.q));
     gl.uniform3fv(prAst.u.uCenter, R(ringedP.pos));
     for (const it of ringItems) {
+      gl.bindVertexArray(it.vao);
+      gl.drawElementsInstanced(gl.TRIANGLES, it.n, gl.UNSIGNED_INT, 0, it.count);
+    }
+  }
+  // Phase 6E: outer belts of streamed systems (lit by their own star)
+  for (const s of secs) {
+    const B = s.belt;
+    if (!B || !B.items.length || len(sub(eyeW, B.C)) > B.R1 + 20000 || !vis(B.C, B.R1)) continue;
+    gl.uniform3fv(prAst.u.uStar, R(s.star.pos));
+    gl.uniform3fv(prAst.u.uSunCol, s.star.col);
+    gl.uniformMatrix3fv(prAst.u.uPlane, false, q2m3(B.q));
+    gl.uniform3fv(prAst.u.uCenter, R(B.C));
+    for (const it of B.items) {
       gl.bindVertexArray(it.vao);
       gl.drawElementsInstanced(gl.TRIANGLES, it.n, gl.UNSIGNED_INT, 0, it.count);
     }
@@ -748,6 +818,29 @@ function render(rt) {
           gl.uniform3f(pPt.u.uPlC, pl.col[0] * lk, pl.col[1] * lk, pl.col[2] * lk);
           pts(6, plumePoints(), vent, Math.min(npl, PLUME_N));
         }
+  // Phase 6E: comet tails (ion: straight, away from the star; dust: broader, curving back along the orbit); none far away
+  const nct = CFG.COMET_PARTICLES[CFG.QUALITY] ? Math.min(TAIL_N, CFG.COMET_PARTICLES[CFG.QUALITY] >> 1) : 0;
+  if (nct > 0)
+    for (const s of secs)
+      for (const c of s.comets) {
+        if (!c.pos || len(sub(c.pos, eyeW)) > CFG.COMET_RANGE) continue;
+        const st = s.star,
+          rs = len(sub(c.pos, st.pos));
+        const act = Math.min(1.4, Math.pow((c.a * (1 - c.e) * 3.5) / Math.max(rs, 1), 1.2)); // strongest near perihelion, faint far out
+        if (act < 0.04) continue;
+        const ad = norm(sub(c.pos, st.pos)),
+          vd = cometVel(c, time);
+        const Lt = 600 + 2600 * act;
+        if (!vis(add(c.pos, scl(ad, Lt * 0.5)), Lt)) continue;
+        for (const kind of [0, 1]) {
+          gl.uniform4f(pPt.u.uTl, ad[0], ad[1], ad[2], kind ? Lt * 0.7 : Lt);
+          gl.uniform4f(pPt.u.uTl2, vd[0], vd[1], vd[2], kind ? 160 + 120 * act : 50 + 30 * act);
+          gl.uniform4f(pPt.u.uTl3, kind, kind ? 170 : 110, (kind ? 0.6 : 0.75) * Math.min(1, act), kind ? 0.025 : 0.06);
+          if (kind) gl.uniform3f(pPt.u.uTlC, 1, 0.9 * st.col[1], 0.72 * st.col[2]);
+          else gl.uniform3f(pPt.u.uTlC, 0.45, 0.65, 1);
+          pts(7, tailPoints(), c.pos, nct);
+        }
+      }
   gl.bindVertexArray(null);
   gl.depthMask(true);
   gl.disable(gl.BLEND);
@@ -762,6 +855,20 @@ function render(rt) {
   let volOn = false;
   if (CFG.VOLUMETRICS && quality.vol) {
     let n = 0;
+    // Phase 6E: landmark shells (supernova remnants, planetary nebulae) of nearby sectors come first, from the sector metas
+    // (no loading needed, so they never pop in); then the old nebula pockets. Any shell switches to the SHELL build.
+    const shells = tiled ? [] : landmarkShells(eyeW);
+    volK.fill(0);
+    for (const L of shells) {
+      if (n >= 3 || !vis(L.c, L.R)) continue;
+      const rc = R(L.c);
+      volData.set([rc[0], rc[1], rc[2], L.R], n * 4);
+      volCol.set([0, 0, 0, 0], n * 4);
+      volK.set([L.kind, L.inner, L.gain, L.seed], n * 4);
+      volA.set([L.axis[0], L.axis[1], L.axis[2], 0], n * 4);
+      n++;
+    }
+    const nShell = n;
     for (const c of clouds) {
       if (n < 3 && vis(c.c, c.R)) {
         const rc = R(c.c);
@@ -770,11 +877,17 @@ function render(rt) {
         n++;
       }
     }
-    if (n > 0) {
+    const pV = nShell ? volShellProg() : pVol;
+    if (n > 0 && pV) {
       volOn = true;
+      const pVol = pV;
       gl.bindFramebuffer(gl.FRAMEBUFFER, fb.vol);
       gl.viewport(0, 0, fb.vw, fb.vh);
       gl.useProgram(pVol.p);
+      if (nShell) {
+        gl.uniform4fv(pVol.u.uCloudK, volK);
+        gl.uniform4fv(pVol.u.uCloudA, volA);
+      }
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, fb.depth);
       gl.uniform1i(pVol.u.uDepth, 0);
